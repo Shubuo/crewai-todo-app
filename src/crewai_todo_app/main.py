@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+import sys
+import warnings
+
+from dotenv import load_dotenv
+
+from crewai_todo_app.crew import CrewAITodoApp
+
+load_dotenv()
+
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
+
+
+def _default_inputs() -> dict[str, str]:
+    return {
+        "project_name": "CrewAI Todo App",
+        "output_file": "todo_app.py",
+    }
+
+
+def run():
+    """Run the crew."""
+    inputs = _default_inputs()
+
+    try:
+        CrewAITodoApp().crew().kickoff(inputs=inputs)
+    except Exception as e:
+        raise Exception(f"An error occurred while running the crew: {e}")
+
+
+def train():
+    """Train the crew for a given number of iterations."""
+    inputs = _default_inputs()
+
+    try:
+        CrewAITodoApp().crew().train(n_iterations=int(sys.argv[1]), filename=sys.argv[2], inputs=inputs)
+    except Exception as e:
+        raise Exception(f"An error occurred while training the crew: {e}")
+
+
+def replay():
+    """Replay the crew execution from a specific task."""
+    try:
+        CrewAITodoApp().crew().replay(task_id=sys.argv[1])
+    except Exception as e:
+        raise Exception(f"An error occurred while replaying the crew: {e}")
+
+
+def test():
+    """Test the crew execution and return the results."""
+    inputs = _default_inputs()
+
+    try:
+        CrewAITodoApp().crew().test(n_iterations=int(sys.argv[1]), eval_llm=sys.argv[2], inputs=inputs)
+    except Exception as e:
+        raise Exception(f"An error occurred while testing the crew: {e}")
+
+
+def run_with_trigger():
+    """Run the crew with trigger payload."""
+    import json
+
+    if len(sys.argv) < 2:
+        raise Exception("No trigger payload provided. Please provide JSON payload as argument.")
+
+    try:
+        trigger_payload = json.loads(sys.argv[1])
+    except json.JSONDecodeError:
+        raise Exception("Invalid JSON payload provided as argument")
+
+    inputs = _default_inputs()
+    inputs["crewai_trigger_payload"] = trigger_payload
+
+    try:
+        result = CrewAITodoApp().crew().kickoff(inputs=inputs)
+        return result
+    except Exception as e:
+        raise Exception(f"An error occurred while running the crew with trigger: {e}")

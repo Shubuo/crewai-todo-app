@@ -1,0 +1,25 @@
+[project]
+name = "crewai-todo-app"
+version = "0.1.0"
+description = "Single-agent CrewAI baseline for generating a Todo App"
+authors = [{ name = "Burak" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[litellm]==1.9.3",
+    "flask>=3.1.0,<4.0.0"
+]
+
+[project.scripts]
+crewai_todo_app = "crewai_todo_app.main:run"
+run_crew = "crewai_todo_app.main:run"
+train = "crewai_todo_app.main:train"
+replay = "crewai_todo_app.main:replay"
+test = "crewai_todo_app.main:test"
+run_with_trigger = "crewai_todo_app.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
