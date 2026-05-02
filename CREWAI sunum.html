@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MultiAgent Systems - Grup 4 Sunumu</title>
+  <style>
+    :root {
+      --bg: #eff3f9;
+      --card: #ffffff;
+      --ink: #162033;
+      --muted: #5d687b;
+      --line: #d7dfec;
+      --accent: #4338ca;
+      --accent-soft: #ecebff;
+      --code: #111827;
+      --code-ink: #e5eefc;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+
+    .deck {
+      width: min(1200px, calc(100% - 48px));
+      margin: 32px auto;
+    }
+
+    .helper {
+      margin-bottom: 20px;
+      padding: 16px 20px;
+      border-radius: 16px;
+      border: 1px solid #c8c4ff;
+      background: var(--accent-soft);
+      color: #2f2879;
+      font-size: 15px;
+    }
+
+    .slide {
+      min-height: 675px;
+      margin-bottom: 28px;
+      padding: 42px 48px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 18px 48px rgba(22, 32, 51, 0.08);
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .label {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.15;
+    }
+
+    h1 {
+      font-size: 42px;
+    }
+
+    h2 {
+      font-size: 34px;
+    }
+
+    h3 {
+      font-size: 22px;
+    }
+
+    p {
+      margin: 0;
+      font-size: 22px;
+      color: var(--muted);
+    }
+
+    .lead {
+      font-size: 26px;
+      color: var(--ink);
+    }
+
+    .emphasis {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    ul,
+    ol {
+      margin: 0;
+      padding-left: 26px;
+      font-size: 23px;
+    }
+
+    li {
+      margin: 10px 0;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 21px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 12px 14px;
+      text-align: left;
+    }
+
+    th {
+      background: #f8faff;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .panel {
+      padding: 22px;
+      background: #f8faff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      overflow: auto;
+      white-space: pre-wrap;
+      background: var(--code);
+      color: var(--code-ink);
+      border-radius: 16px;
+      font-size: 18px;
+      line-height: 1.45;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    }
+
+    .small {
+      font-size: 18px;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .deck {
+        width: 100%;
+        margin: 0;
+      }
+
+      .helper {
+        display: none;
+      }
+
+      .slide {
+        margin: 0;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="helper">Her beyaz kart bir slayt olarak hazirlandi. PowerPoint'e kart bazli kopyala-yapistir yapabilirsin.</div>
+
+    <section class="slide">
+      <div class="label">Slayt 1</div>
+      <h1>MULTIAGENT SYSTEMS</h1>
+      <p class="lead">Grup 4 Sunumu</p>
+      <p class="lead">Proje: Single vs Multi-Agent Karsilastirmali TODO Uygulamasi</p>
+      <ul>
+        <li>Framework: CrewAI</li>
+        <li>Kuramsal temel: Wooldridge + FIPA standartlari</li>
+        <li>Vaka calismasi: <code>Shubuo/crewai-todo-app</code></li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 2</div>
+      <h2>Sunum Akisi</h2>
+      <ol>
+        <li>MAS Teorisi ve CrewAI Mimarisi</li>
+        <li>FIPA Standartlari ile CrewAI Entegrasyonu</li>
+        <li>Hafiza ve Hata Yonetimi</li>
+        <li>Uygulama: Single Agent Case Study ve Multi-Agent gecis motivasyonu</li>
+      </ol>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 3</div>
+      <h2>BOLUM 1</h2>
+      <p class="lead">MAS Teorisi ve CrewAI Mimarisi</p>
+      <p>Wooldridge'in akademik temelleri ile CrewAI'in eslestirilmesi</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 4</div>
+      <h2>1.1 Ajan Kavrami ve BDI Modeli</h2>
+      <ul>
+        <li>Ozerklik: Kendi kararlarini verir</li>
+        <li>Sosyal yetenek: Diger ajanlarla iletisim kurabilir</li>
+        <li>Reaktiflik: Cevreyi algilar ve tepki verir</li>
+        <li>Proaktiflik: Hedef odakli davranir</li>
+      </ul>
+      <div class="panel">
+        <h3>BDI</h3>
+        <ul>
+          <li>Belief: Dunya hakkindaki bilgi</li>
+          <li>Desire: Ulasmak istedigi hedefler</li>
+          <li>Intention: Gerceklestirmeye karar verdigi eylemler</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 5</div>
+      <h2>BDI -> CrewAI Eslesmesi</h2>
+      <table>
+        <tr><th>BDI</th><th>CrewAI Karsiligi</th></tr>
+        <tr><td>Belief</td><td><code>backstory</code> ve gerekiyorsa <code>memory</code></td></tr>
+        <tr><td>Desire</td><td><code>goal</code></td></tr>
+        <tr><td>Intention</td><td><code>task</code> tanimi</td></tr>
+      </table>
+      <pre><code>Agent(
+  role="Full-Stack Developer",
+  goal="Produce a complete, runnable Todo App",
+  backstory="Pragmatic engineer who values clean code",
+)</code></pre>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 6</div>
+      <h2>1.2 CrewAI'in Yapi Taslari</h2>
+      <ul>
+        <li><code>Agents</code>: Rol tabanli uzmanlar</li>
+        <li><code>Tasks</code>: Tanimli is birimleri</li>
+        <li><code>Tools</code>: Ajanin dis dunya ile temas noktasi</li>
+        <li><code>Crew</code>: Sistemi baslatan ve yoneten orkestra</li>
+      </ul>
+      <h2>1.3 Surec Yonetimi</h2>
+      <div class="two-col">
+        <div class="panel">
+          <h3>Sequential</h3>
+          <ul>
+            <li>Klasik pipeline</li>
+            <li>Her task bir oncekinin ciktisini alir</li>
+            <li>Mevcut projede kullanilan yontem</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Hierarchical</h3>
+          <ul>
+            <li>Manager Agent sistemi yonetir</li>
+            <li>Dinamik is dagitimi saglar</li>
+            <li>Daha esnek ama daha karmasiktir</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 7</div>
+      <h2>BOLUM 2</h2>
+      <p class="lead">FIPA Standartlari ile CrewAI Entegrasyonu</p>
+      <p>Projenin akademik derinligini gostermek</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 8</div>
+      <h2>2.1 FIPA Nedir?</h2>
+      <ul>
+        <li>Foundation for Intelligent Physical Agents</li>
+        <li>Ajan sistemleri icin uluslararasi standartlar sunar</li>
+        <li>Ajanlarin iletisimini, kimligini ve hizmet tanitimini tanimlar</li>
+      </ul>
+      <h2>2.2 Yasam Dongusu ve Kayit</h2>
+      <p>FIPA'da AMS agent kaydini ve yasam dongusunu takip eder.</p>
+      <pre><code>Crew(agents=[developer, tester, reviewer])</code></pre>
+      <p class="small">Bu liste, White Pages mantigina benzetilebilir.</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 9</div>
+      <h2>2.3 Yeteneklerin Kesfi</h2>
+      <p>FIPA'da DF, "kim ne yapabilir" bilgisini tutar.</p>
+      <pre><code>Agent(tools=[search_tool, code_tool, db_tool])</code></pre>
+      <p class="small"><code>tools</code> listesi, FIPA'daki Yellow Pages benzeri dusunulebilir.</p>
+
+      <h2>2.4 Ajanlar Arasi Iletisim</h2>
+      <ul>
+        <li>REQUEST</li>
+        <li>INFORM</li>
+        <li>REFUSE</li>
+        <li>FAILURE</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 10</div>
+      <h2>FIPA ACL -> CrewAI Context Passing</h2>
+      <pre><code>Task(
+  description="Backend kodunu yaz",
+  context=[planning_task]
+)</code></pre>
+      <ul>
+        <li>Bir task'in output'u sonraki task'in input'u olur</li>
+        <li>Bu, mesaj yukunun bir task'tan digerine aktarilmasina benzer</li>
+      </ul>
+      <p class="small">Sunum notu: FIPA diyagrami ile bu kodu yan yana koy.</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 11</div>
+      <h2>BOLUM 3</h2>
+      <p class="lead">Hafiza ve Hata Yonetimi</p>
+      <p>Sistemin sadece calismasini degil, akilli calismasini saglayan mekanizmalar</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 12</div>
+      <h2>3.1 Hafiza Sistemleri</h2>
+      <div class="two-col">
+        <div class="panel">
+          <h3>Short-term Memory</h3>
+          <ul>
+            <li>Gorev sirasinda ogrenilen bilgiler</li>
+            <li>Baglami kisa sureli korur</li>
+            <li>Ornek: "Bu app Flask kullaniyor" bilgisi</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Long-term Memory</h3>
+          <ul>
+            <li>Onceki oturumlardan veri tasir</li>
+            <li>RAG ve vector DB ile calisabilir</li>
+            <li>Ornek: Benzer bug cozumunu hatirlamak</li>
+          </ul>
+        </div>
+      </div>
+      <pre><code>Crew(memory=True)
+Crew(memory=True, embedder={...})</code></pre>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 13</div>
+      <h2>3.2 Hata Yonetimi ve Oz-Duzeltme</h2>
+      <ol>
+        <li>Agent bir tool cagirir</li>
+        <li>Tool hata dondurur</li>
+        <li>Agent hatayi analiz eder</li>
+        <li>Yeni stratejiyle tekrar dener</li>
+        <li>Sinira ulasinca gorevi basarisiz isaretler</li>
+      </ol>
+      <p>TODO App ornegi: SQLite baglantisi hata verirse agent yolu veya parametreyi duzeltip tekrar deneyebilir.</p>
+      <pre><code>Agent(max_retry_limit=3)</code></pre>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 14</div>
+      <h2>3.3 Human-in-the-Loop</h2>
+      <ul>
+        <li>Geri donusu olmayan islemler</li>
+        <li>Belirsiz karar noktalarinda tercih gereksinimi</li>
+        <li>Guvenlik gerektiren durumlar</li>
+      </ul>
+      <ol>
+        <li>Agent kritik noktaya gelir</li>
+        <li>Durur ve onay ister</li>
+        <li>Onaya gore devam eder veya alternatif arar</li>
+      </ol>
+      <pre><code>Task(human_input=True)</code></pre>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 15</div>
+      <h2>BOLUM 4</h2>
+      <p class="lead">Uygulama - Single Agent Case Study</p>
+      <p>Mevcut projenin analizi ve Multi-Agent'a gecisin motivasyonu</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 16</div>
+      <h2>4.1 Mevcut Projenin Mimarisi</h2>
+      <p>Repository: <code>https://github.com/Shubuo/crewai-todo-app</code></p>
+      <pre><code>src/crewai_todo_app/
+├── config/
+│   ├── agents.yaml
+│   └── tasks.yaml
+├── crew.py
+└── main.py</code></pre>
+      <ul>
+        <li>Agent: <code>full_stack_developer</code></li>
+        <li>Model: <code>minimax-m2.7</code> (OpenRouter uzerinden)</li>
+        <li>Gorev: Flask + SQLite + HTML/CSS/JS tek dosyada Todo App yazmak</li>
+        <li>Process: Sequential</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 17</div>
+      <h2>Single-Agent Baseline'da Uretilen Uygulama</h2>
+      <ul>
+        <li>Cikti dosyasi: <code>todo_app.py</code></li>
+        <li>Flask API endpoint'leri uretildi</li>
+        <li>SQLite persistence kuruldu</li>
+        <li>Inline HTML/CSS/JS arayuz uretildi</li>
+        <li>CRUD akislarinin tamami calisir hale geldi</li>
+      </ul>
+      <p>Refinement turunda JSON dogrulamasi, boolean standardizasyonu ve <code>created_at</code> gosterimi eklendi.</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 18</div>
+      <h2>4.2 Single Agent'in Sinirlamalari</h2>
+      <ul>
+        <li>Tek agent backend, frontend, veri modeli ve testi ayni anda dusunuyor</li>
+        <li>Dikkat dagildiginda eksik veya hatali kod uretebiliyor</li>
+        <li>Kod kalitesi butun kisimlarda esit olmuyor</li>
+        <li>Ayri bir review ve test rolu yok</li>
+        <li>Bu baseline'da memory kullanimi da yok</li>
+      </ul>
+      <p class="emphasis">Tek agent = Tek dikkat noktasi = Karmasik gorevlerde performans dususu</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 19</div>
+      <h2>4.3 Sorunlarin Gorsel Kaniti</h2>
+      <ul>
+        <li>Ekran goruntusu 1: Single agent ciktisi veya ilk ham kod</li>
+        <li>Ekran goruntusu 2: Hata mesaji ya da tutarsiz output</li>
+        <li>Ekran goruntusu 3: CrewAI terminal ciktisi</li>
+      </ul>
+      <p>Sunum teknigi: Once problemi goster, sonra "neden yetersiz?" sorusunu sor, cevabi bir sonraki slaytta ver.</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 20</div>
+      <h2>4.4 Buyuk Final Duyurusu</h2>
+      <p class="lead">"Bu sunumda Single Agent'in neden yetersiz kaldigini gorduk."</p>
+      <p class="lead">"Final projemizde, CrewAI kullanarak tasarladigimiz Multi-Agent sistemin bu problemleri nasil cozdugunu ve ikisi arasindaki performans farkini canli verilerle sunacagiz."</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 21</div>
+      <h2>Multi-Agent Final Projesi Onizlemesi</h2>
+      <ul>
+        <li>Product Planner Agent</li>
+        <li>Backend Developer Agent</li>
+        <li>Frontend Developer Agent</li>
+        <li>Test Agent</li>
+        <li>Review Agent</li>
+      </ul>
+      <h3>Karsilastirma metrikleri</h3>
+      <ul>
+        <li>Kod kalitesi</li>
+        <li>Tamamlanma suresi</li>
+        <li>Cikti tutarliligi</li>
+        <li>Token kullanimi</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 22</div>
+      <h2>Genel Sunum Notlari</h2>
+      <ul>
+        <li>Akis: Bolum 1 -> Bolum 2 -> Bolum 3 -> Bolum 4</li>
+        <li>Her bolum icin 5-7 dakika</li>
+        <li>Toplam sure: 20-28 dakika</li>
+      </ul>
+      <h3>Gorsel oneriler</h3>
+      <ul>
+        <li>BDI <-> CrewAI eslestirme tablosu</li>
+        <li>FIPA diyagrami ile CrewAI kodu yan yana</li>
+        <li>Memory turleri diyagrami</li>
+        <li>Single vs Multi-Agent mimari semasi</li>
+        <li>Terminal ciktilari ekran goruntuleri</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 23</div>
+      <h2>Referanslar</h2>
+      <ul>
+        <li>Wooldridge, M. <em>An Introduction to MultiAgent Systems</em></li>
+        <li>FIPA standartlari: <code>http://www.fipa.org/</code></li>
+        <li>CrewAI dokumantasyonu: <code>https://docs.crewai.com/</code></li>
+        <li>GitHub repo: <code>https://github.com/Shubuo/crewai-todo-app</code></li>
+      </ul>
+      <p class="emphasis">Single-agent baseline, Multi-Agent sisteme gecisin neden gerekli oldugunu gosteren pratik bir ilk adimdir.</p>
+    </section>
+  </div>
+</body>
+</html>

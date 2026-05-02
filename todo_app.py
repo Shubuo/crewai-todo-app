@@ -1,14 +1,12 @@
-"""
-Flask Todo App with SQLite persistence.
-Run with: python todo_app.py
-"""
-
-import sqlite3
 import os
+import sqlite3
+from pathlib import Path
+
 from flask import Flask, request, jsonify, g, render_template_string
 
 # Configuration
-DATABASE = 'todo.db'
+BASE_DIR = Path(__file__).resolve().parent
+DATABASE = BASE_DIR / 'todo.db'
 app = Flask(__name__)
 
 # Database helpers
@@ -19,6 +17,28 @@ def get_db():
         db = g._database = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
     return db
+
+
+def row_to_todo(row):
+    """Convert a SQLite row into the API shape expected by the UI."""
+    return {
+        'id': row['id'],
+        'title': row['title'],
+        'completed': bool(row['completed']),
+        'created_at': row['created_at'],
+    }
+
+
+def get_json_payload():
+    """Return a JSON object payload or None when the request body is invalid."""
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else None
+
+
+def fetch_todo_row(todo_id):
+    """Fetch a todo row by id."""
+    db = get_db()
+    return db.execute('SELECT * FROM todos WHERE id = ?', (todo_id,)).fetchone()
 
 @app.teardown_appcontext
 def close_connection(exception):
@@ -35,7 +55,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS todos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
-                completed INTEGER DEFAULT 0,
+                completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -47,87 +67,88 @@ def get_todos():
     """Get all todos."""
     db = get_db()
     cursor = db.execute('SELECT * FROM todos ORDER BY created_at DESC')
-    todos = [dict(row) for row in cursor.fetchall()]
+    todos = [row_to_todo(row) for row in cursor.fetchall()]
     return jsonify(todos)
 
 @app.route('/api/todos', methods=['POST'])
 def create_todo():
     """Create a new todo."""
-    data = request.get_json()
+    data = get_json_payload()
+    if data is None:
+        return jsonify({'error': 'A JSON object is required'}), 400
+
     title = data.get('title', '').strip()
-    
+
     if not title:
         return jsonify({'error': 'Title is required'}), 400
-    
+
     db = get_db()
     cursor = db.execute(
         'INSERT INTO todos (title, completed) VALUES (?, ?)',
         (title, 0)
     )
     db.commit()
-    
+
     todo_id = cursor.lastrowid
-    cursor = db.execute('SELECT * FROM todos WHERE id = ?', (todo_id,))
-    todo = dict(cursor.fetchone())
-    
+    todo = row_to_todo(fetch_todo_row(todo_id))
+
     return jsonify(todo), 201
 
 @app.route('/api/todos/<int:todo_id>', methods=['GET'])
 def get_todo(todo_id):
     """Get a specific todo by ID."""
-    db = get_db()
-    cursor = db.execute('SELECT * FROM todos WHERE id = ?', (todo_id,))
-    todo = cursor.fetchone()
-    
+    todo = fetch_todo_row(todo_id)
+
     if todo is None:
         return jsonify({'error': 'Todo not found'}), 404
-    
-    return jsonify(dict(todo))
+
+    return jsonify(row_to_todo(todo))
 
 @app.route('/api/todos/<int:todo_id>', methods=['PUT'])
 def update_todo(todo_id):
     """Update a todo (title and/or completed status)."""
-    data = request.get_json()
-    
-    db = get_db()
-    cursor = db.execute('SELECT * FROM todos WHERE id = ?', (todo_id,))
-    todo = cursor.fetchone()
-    
+    data = get_json_payload()
+    if data is None:
+        return jsonify({'error': 'A JSON object is required'}), 400
+
+    todo = fetch_todo_row(todo_id)
+
     if todo is None:
         return jsonify({'error': 'Todo not found'}), 404
-    
+
     title = data.get('title', todo['title'])
     if title is not None:
         title = title.strip()
         if not title:
             return jsonify({'error': 'Title cannot be empty'}), 400
-    
-    completed = data.get('completed', todo['completed'])
-    
+
+    completed = data.get('completed', bool(todo['completed']))
+    if not isinstance(completed, bool):
+        return jsonify({'error': 'Completed must be true or false'}), 400
+
+    db = get_db()
     db.execute(
         'UPDATE todos SET title = ?, completed = ? WHERE id = ?',
         (title, 1 if completed else 0, todo_id)
     )
     db.commit()
-    
-    cursor = db.execute('SELECT * FROM todos WHERE id = ?', (todo_id,))
-    updated_todo = dict(cursor.fetchone())
-    
+
+    updated_todo = row_to_todo(fetch_todo_row(todo_id))
+
     return jsonify(updated_todo)
 
 @app.route('/api/todos/<int:todo_id>', methods=['DELETE'])
 def delete_todo(todo_id):
     """Delete a todo."""
     db = get_db()
-    cursor = db.execute('SELECT * FROM todos WHERE id = ?', (todo_id,))
-    todo = cursor.fetchone()
-    
+    todo = fetch_todo_row(todo_id)
+
     if todo is None:
         return jsonify({'error': 'Todo not found'}), 404
-    
+
     db.execute('DELETE FROM todos WHERE id = ?', (todo_id,))
     db.commit()
-    
+
     return jsonify({'message': 'Todo deleted successfully'})
 
 # Routes - UI
@@ -244,6 +265,12 @@ TEMPLATE = '''
             font-size: 16px;
             color: #374151;
             word-break: break-word;
+        }
+        .todo-meta {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #9ca3af;
         }
         .edit-input {
             flex: 1;
@@ -510,7 +537,10 @@ TEMPLATE = '''
                     <input type="checkbox" class="todo-checkbox" 
                            ${todo.completed ? 'checked' : ''} 
                            onchange="toggleTodo(${todo.id}, ${todo.completed})">
-                    <span class="todo-text">${escapeHtml(todo.title)}</span>
+                    <span class="todo-text">
+                        ${escapeHtml(todo.title)}
+                        <span class="todo-meta">Created: ${formatDate(todo.created_at)}</span>
+                    </span>
                     <div class="btn-group">
                         <button class="btn btn-edit" onclick="startEdit(${todo.id}, '${escapeHtml(todo.title)}')">Edit</button>
                         <button class="btn btn-delete" onclick="deleteTodo(${todo.id})">Delete</button>
@@ -531,6 +561,15 @@ TEMPLATE = '''
                 <span>✅ Completed: ${completed}</span>
                 <span>⏳ Pending: ${pending}</span>
             `;
+        }
+
+        function formatDate(value) {
+            const parsed = new Date(value.replace(' ', 'T'));
+            if (Number.isNaN(parsed.getTime())) {
+                return value;
+            }
+
+            return parsed.toLocaleString();
         }
         
         // Show error message
