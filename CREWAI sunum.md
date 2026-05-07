@@ -4,403 +4,298 @@ theme: default
 paginate: true
 size: 16:9
 title: MultiAgent Systems - Grup 4
-description: Single vs Multi-Agent Karsilastirmali TODO Uygulamasi ve CrewAI
+description: Faz 1 Single-Agent Drone Flight Checklist Uygulamasi ve CrewAI
 ---
 
 # MULTIAGENT SYSTEMS
 
 ## Grup 4 Sunumu
 
-### Proje: Single vs Multi-Agent Karsilastirmali TODO Uygulamasi
+### Proje: Faz 1 Single-Agent Drone Flight Checklist Uygulamasi
 
 - Framework: CrewAI
 - Kuramsal temel: Wooldridge + FIPA standartlari
-- Vaka calismasi: `Shubuo/crewai-todo-app`
+- Vaka calismasi: mevcut todo baseline'inin checklist urunune pivot edilmesi
 
 ---
 
 # Sunum Akisi
 
-1. MAS Teorisi ve CrewAI Mimarisi
-2. FIPA Standartlari ile CrewAI Entegrasyonu
-3. Hafiza ve Hata Yonetimi
-4. Uygulama: Single Agent Case Study ve Multi-Agent gecis motivasyonu
+1. MAS teorisi ve CrewAI mimarisi
+2. FIPA ve ajan koordinasyonu
+3. Hafiza, hata yonetimi ve insan onayi
+4. Faz 1 case study: Drone checklist pivotu
 
 ---
 
-# BOLUM 1
-
-## MAS Teorisi ve CrewAI Mimarisi
-
-### KONU
-
-Wooldridge'in akademik temelleri ile CrewAI'in eslestirilmesi
-
----
-
-# 1.1 Ajan Kavrami ve BDI Modeli
+# 1. Ajan Kavrami ve BDI
 
 Wooldridge'e gore ajan ozellikleri:
 
-- Ozerklik: Kendi kararlarini verir
-- Sosyal yetenek: Diger ajanlarla iletisim kurabilir
-- Reaktiflik: Cevreyi algilar ve tepki verir
-- Proaktiflik: Hedef odakli davranir
+- Ozerklik
+- Sosyal yetenek
+- Reaktiflik
+- Proaktiflik
 
 BDI modeli:
 
-- Belief: Ajanin dunya hakkindaki bilgisi
-- Desire: Ajanin ulasmak istedigi hedefler
-- Intention: Gerceklestirmeye karar verdigi eylemler
+- Belief: dunya bilgisi
+- Desire: hedef
+- Intention: gorev planı
 
 ---
 
 # BDI -> CrewAI Eslesmesi
 
-| BDI | CrewAI Karsiligi |
+| BDI | CrewAI karsiligi |
 | --- | --- |
-| Belief | `backstory` ve gerekiyorsa `memory` |
+| Belief | `backstory`, gerekirse `memory` |
 | Desire | `goal` |
-| Intention | `task` tanimi |
+| Intention | `task` |
 
 ```python
 Agent(
     role="Full-Stack Developer",
-    goal="Produce a complete, runnable Todo App",
-    backstory="Pragmatic engineer who values clean code",
+    goal="Produce a runnable drone flight checklist app",
+    backstory="Pragmatic engineer who ships small usable products",
 )
 ```
 
-Sunum notu: Bu tabloda BDI kavramlarini solda, CrewAI alanlarini sagda gostermek akisi netlestirir.
+---
+
+# CrewAI'in Yapi Taslari
+
+- `Agents`: rol tabanli uzmanlar
+- `Tasks`: tanimli is birimleri
+- `Tools`: dis dunya ile temas noktasi
+- `Crew`: akisi yoneten orkestra
+
+Bu projede Faz 1 icin akıs bilerek basit tutulur:
+
+- tek agent
+- tek ana task
+- sequential process
 
 ---
 
-# 1.2 CrewAI'in Yapi Taslari
+# FIPA ile Baglanti
 
-- `Agents`: Rol tabanli uzmanlar
-- `Tasks`: Tanimli is birimleri
-- `Tools`: Ajanin dis dunya ile temas noktalari
-- `Crew`: Sistemi baslatan ve yoneten orkestra
+FIPA, ajanlar icin ortak kavramsal dil sunar:
 
-Bu yapi, soyut MAS kavramlarini calisan bir yazilim modeline donusturur.
+- kimlik ve yasam dongusu
+- yetenek tanitimi
+- mesajlasma davranislari
 
----
+CrewAI tarafi:
 
-# 1.3 Surec Yonetimi
-
-## Sequential
-
-- Her task bir oncekinin ciktisini alir
-- Klasik pipeline mantigi
-- Mevcut projede kullandigimiz yontem
-- Ornek akis: Planlama -> Gelistirme -> Test -> Review
-
-## Hierarchical
-
-- Manager Agent sistemi yonetir
-- Hangi agent'in ne zaman calisacagina karar verir
-- Dinamik is dagitimi saglar
-- Daha karmasik ama daha esnektir
+- agent listesi = kimler var
+- task zinciri = kim ne zaman ne yapar
+- tools = hangi yetenekler mevcut
 
 ---
 
-# BOLUM 2
+# FIPA ACL -> Task Context
 
-## FIPA Standartlari ile CrewAI Entegrasyonu
+Temel speech act fikirleri:
 
-### KONU
+- `REQUEST`
+- `INFORM`
+- `REFUSE`
+- `FAILURE`
 
-Projenin akademik derinligini gostermek
-
----
-
-# 2.1 FIPA Nedir?
-
-FIPA: Foundation for Intelligent Physical Agents
-
-- Ajan sistemleri icin uluslararasi standartlar sunar
-- Ajanlarin iletisimini tanimlar
-- Ajanlarin kimlik ve hizmet tanitimini standartlastirir
-- MAS teorisini uygulamaya tasiyan ortak bir sozluk olusturur
-
----
-
-# 2.2 Yasam Dongusu ve Kayit
-
-## AMS - Agent Management System
-
-FIPA'da:
-
-- Her agent sisteme kaydolur
-- Kimlik alir
-- Yasam dongusu takip edilir
-
-CrewAI karsiligi:
-
-```python
-Crew(agents=[developer, tester, reviewer])
-```
-
-- Bu liste, FIPA'daki White Pages mantigina benzetilebilir
-- Sistemde hangi agent'larin oldugu burada tanimlanir
-
----
-
-# 2.3 Yeteneklerin Kesfi
-
-## DF - Directory Facilitator
-
-FIPA'da:
-
-- Agent'lar yeteneklerini bir dizine kaydeder
-- Diger agent'lar bu dizinden "kim ne yapabilir" diye sorgular
-
-CrewAI karsiligi:
-
-```python
-Agent(tools=[search_tool, code_tool, db_tool])
-```
-
-- `tools` listesi, FIPA'daki Yellow Pages benzeri dusunulebilir
-- Hangi agent'in hangi yeteneklere sahip oldugu burada gorulur
-
----
-
-# 2.4 Ajanlar Arasi Iletisim
-
-## FIPA ACL ve Speech Acts
-
-Temel eylem tipleri:
-
-- `REQUEST`: Sunu yap
-- `INFORM`: Sunu ogrendim
-- `REFUSE`: Bunu yapamam
-- `FAILURE`: Denedim ama basarisiz oldum
-
-CrewAI karsiligi:
+CrewAI benzetmesi:
 
 ```python
 Task(
-    description="Backend kodunu yaz",
+    description="Checklist uygulamasini uret",
     context=[planning_task]
 )
 ```
 
-- Bir task'in output'u sonraki task'in input'u olur
-- Bu, mesaj yukunun bir task'tan digerine aktarilmasina benzer
-
-Sunum notu: FIPA diyagrami ile `context` kullanan CrewAI kodunu yan yana koy.
+Bir task'in output'u sonraki task'in girdisine donusebilir.
 
 ---
 
-# BOLUM 3
+# Hafiza ve Hata Yonetimi
 
-## Hafiza ve Hata Yonetimi
+Kritik noktalar:
 
-### KONU
+- short-term memory baglam korur
+- long-term memory tekrar kullanimi destekler
+- retry mekanizmasi agent'in oz-duzeltme yapmasini saglar
+- insan onayi belirsiz veya kritik secimlerde devreye girer
 
-Sistemin sadece calismasini degil, akilli calismasini saglayan mekanizmalar
-
----
-
-# 3.1 Hafiza Sistemleri
-
-## Short-term Memory
-
-- Gorev sirasinda ogrenilen bilgiler
-- Gorev boyunca baglami korur
-- Ornek: Agent, uygulamanin Flask kullandigini o oturum boyunca hatirlar
-
-## Long-term Memory
-
-- Onceki oturumlardan verileri tasiyabilir
-- RAG ve vector database entegrasyonlari ile calisir
-- Ornek: Daha onceki benzer bir bug'in cozumunu yeniden kullanmak
-
-CrewAI aktivasyonu:
+CrewAI ornekleri:
 
 ```python
 Crew(memory=True)
-Crew(memory=True, embedder={...})
-```
-
----
-
-# 3.2 Hata Yonetimi ve Oz-Duzeltme
-
-Surec:
-
-1. Agent bir tool cagirir
-2. Tool hata dondurur
-3. Agent hatayi analiz eder
-4. Farkli bir stratejiyle tekrar dener
-5. Sinira ulasinca gorevi basarisiz isaretler
-
-TODO App uzerinden ornek:
-
-- SQLite baglantisi ilk denemede hata verebilir
-- Agent dosya yolunu veya parametreyi duzeltip tekrar deneyebilir
-
-CrewAI ayari:
-
-```python
 Agent(max_retry_limit=3)
-```
-
----
-
-# 3.3 Human-in-the-Loop
-
-Ne zaman gerekli?
-
-- Geri donusu olmayan islemler
-- Belirsiz tercih noktalarinda
-- Guvenlik gerektiren kararlarda
-
-Surec:
-
-1. Agent kritik bir noktaya gelir
-2. Durur ve insandan onay ister
-3. Onaya gore devam eder veya alternatif arar
-
-CrewAI aktivasyonu:
-
-```python
 Task(human_input=True)
 ```
 
-Sunum notu: Burada bir e-posta gonderme veya veri silme senaryosu canlandirilabilir.
+---
+
+# Faz 1 Case Study Baslangici
+
+Mevcut repository baslangici:
+
+- tek agentli CrewAI baseline
+- cikti: tek dosya Flask uygulamasi
+- veri modeli: basit todo listesi
+- hedef: CRUD odakli genel amacli uygulama
 
 ---
 
-# BOLUM 4
-
-## Uygulama - Single Agent Case Study
-
-### KONU
-
-Mevcut projenin analizi ve Multi-Agent'a gecisin motivasyonu
-
----
-
-# 4.1 Mevcut Projenin Mimarisi
-
-Repository:
-
-- `https://github.com/Shubuo/crewai-todo-app`
-
-Yapi:
+# Mevcut Repo Mimarisi
 
 ```text
 src/crewai_todo_app/
-├── config/
-│   ├── agents.yaml
-│   └── tasks.yaml
-├── crew.py
-└── main.py
+  config/
+    agents.yaml
+    tasks.yaml
+  crew.py
+  main.py
+drone_checklist_app.py
 ```
 
-Agent:
+Temel durum:
 
-- `full_stack_developer`
-- Model: `minimax-m2.7` (OpenRouter uzerinden)
-- Gorev: Flask + SQLite + HTML/CSS/JS ile tek dosya Todo App yazmak
-- Process: Sequential
-
----
-
-# Single-Agent Baseline'da Uretilen Uygulama
-
-- Cikti dosyasi: `todo_app.py`
-- Flask API endpoint'leri uretildi
-- SQLite persistence kuruldu
-- Inline HTML/CSS/JS arayuz uretildi
-- CRUD akislarinin tamami calisir hale geldi
-
-Refinement turunda:
-
-- JSON payload dogrulamasi eklendi
-- `completed` alani boolean hale getirildi
-- `created_at` bilgisi UI'da gosterildi
-- `PORT` env destegi korundu
+- `full_stack_developer` tek agent'tir
+- gorev tek dosya Flask + SQLite uygulamasi uretmektir
+- process sequential olsa da pratikte tek adimli akistir
 
 ---
 
-# 4.2 Single Agent'in Sinirlamalari
+# Neden Todo Yeterli Degildi?
 
-Gozlemlenen sorunlar:
+Drone operasyonu icin eksikler:
 
-- Tek agent ayni anda backend, frontend, veri modeli ve test dusunuyor
-- Dikkat dagildiginda eksik veya hatali kod uretebiliyor
-- Kod kalitesi butun kisimlarda esit olmuyor
-- Hata ciktiginda ayri bir review veya test role'u yok
-- Memory kullanimi bu baseline'da yok
+- checklist her ucusta sifirlanmiyordu
+- faz bazli akıs yoktu
+- ortam kontrolu icin ayri bolum yoktu
+- acil durum bilgileri referans olarak sunulmuyordu
+- gecmis ucuslar session mantigiyla tutulmuyordu
 
-Temel sorun:
+Sonuc:
 
-**Tek agent = Tek dikkat noktasi = Karmasik gorevlerde performans dususu**
-
----
-
-# 4.3 Sorunlarin Gorsel Kaniti
-
-Bu bolumde slayta eklenebilecek materyaller:
-
-- Ekran goruntusu 1: Single agent ciktisi veya ilk ham kod
-- Ekran goruntusu 2: Uretim sirasinda alinmis hata mesaji ya da tutarsiz output
-- Ekran goruntusu 3: CrewAI terminal ciktisi
-
-Sunum teknigi:
-
-- Once hatali ya da eksik bolumu goster
-- Izleyiciye "neden yetersiz?" sorusunu sor
-- Cevabi bir sonraki slaytta Multi-Agent onizlemesiyle bagla
+**Global todo modeli, ucus bazli operasyon mantigina uymadi.**
 
 ---
 
-# 4.4 Buyuk Final Duyurusu
+# Faz 1 Pivot Kararlari
 
-"Bu sunumda Single Agent'in neden yetersiz kaldigini gorduk.
-
-Final projemizde, CrewAI kullanarak tasarladigimiz Multi-Agent sistemin bu problemleri nasil cozdugunu ve ikisi arasindaki performans farkini canli verilerle sunacagiz."
-
----
-
-# Multi-Agent Final Projesi Onizlemesi
-
-- Product Planner Agent: Gereksinimleri analiz eder
-- Backend Developer Agent: Flask + SQLite kodunu yazar
-- Frontend Developer Agent: HTML/CSS/JS kodunu yazar
-- Test Agent: Uygulamayi test eder
-- Review Agent: Kalite kontrolu yapar
-
-Karsilastirma metrikleri:
-
-- Kod kalitesi
-- Tamamlanma suresi
-- Cikti tutarliligi
-- Token kullanimi
+- Paket adi ayni kaldi: `crewai_todo_app`
+- Uygulama cikti adi degisti: `drone_checklist_app.py`
+- UI Turkce olacak
+- UI tek sayfa ve sade kalacak
+- Sadece single-agent uygulanacak
 
 ---
 
-# Genel Sunum Notlari
+# Yeni Urun Akisi
 
-Akis:
+1. Kullanici yeni ucus baslatir
+2. Sistem standart checklist sablonunu o oturuma kopyalar
+3. Maddeler fazlara gore tamamlanir
+4. Acil durum prosedurleri referans panelinde gorulur
+5. Ucus sonrasinda oturum kapatilir
+6. Gecmis ucuslar saklanir
 
-- Bolum 1 -> Bolum 2 -> Bolum 3 -> Bolum 4
+---
 
-Sure:
+# Checklist Fazlari
 
-- Her bolum: 5-7 dakika
-- Toplam: 20-28 dakika
+- `Ortam Kontrolu`
+- `Ucus Oncesi`
+- `Ucus Sirasinda`
+- `Acil Durum Prosedurleri`
+- `Ucus Sonrasi`
 
-Gorsel oneriler:
+Tasarim karari:
 
-- BDI <-> CrewAI eslestirme tablosu
-- FIPA diyagrami ve CrewAI kodu
-- Memory turleri diyagrami
-- Single vs Multi-Agent mimari semasi
-- Terminal ciktilari ekran goruntuleri
+- `Acil Durum Prosedurleri` checkbox listesi degil
+- referans paneli olarak gosterilir
+
+---
+
+# Veri Modeli
+
+Yeni yapinin cekirdegi uc tablo:
+
+- `checklist_templates`
+- `flight_sessions`
+- `session_items`
+
+Neden?
+
+- ayni maddeler her ucusta tekrar kullanilsin
+- tamamlanma durumu ucusa ozel olsun
+- gecmis ucuslar silinmesin
+
+---
+
+# Faz 1 Single-Agent Akisi
+
+Tek agent su gereksinimleri tasir:
+
+- Flask backend
+- SQLite veri modeli
+- Turkce UI
+- seed checklist verisi
+- session bazli is akisi
+
+Bu, Faz 1 icin bilincli bir secimdir:
+
+- once urunu dogrulamak
+- sonra ajanlari ayirmak
+
+---
+
+# Basit UI Karari
+
+Arayuzde sadece su alanlar vardir:
+
+- aktif ucus karti
+- yeni ucus baslatma formu
+- faz bazli checklist bolumleri
+- acil durum referans paneli
+- gecmis ucuslar listesi
+
+Bilerek eklenmeyenler:
+
+- kullanici sistemi
+- coklu drone profili
+- karmasik dashboard
+
+---
+
+# Faz 1 Dosya Ciktilari
+
+- `drone_checklist_app.py`
+- `PHASE1_DRONE_CHECKLIST_PLAN.md`
+- guncel `README.md`
+- guncel `CREWAI sunum.md`
+- guncel `CREWAI sunum.html`
+
+---
+
+# Faz 1 Kabul Kriterleri
+
+1. CrewAI yeni dosya adina yazar
+2. Uygulama lokal olarak acilir
+3. UI Turkcedir
+4. Her ucus icin yeni checklist olusur
+5. Gecmis ucuslar saklanir
+6. Ortam Kontrolu ayri bolumdur
+7. Acil Durum Prosedurleri referans panelidir
+
+---
+
+# Kapanis
+
+Bu fazda amac Multi-Agent'i kurmak degil, dogru urun modelini single-agent ile netlestirmektir.
+
+Sonraki mantikli adim, ayni urunu uzmanlasmis agent'lara bolmektir.
 
 ---
 
@@ -409,8 +304,4 @@ Gorsel oneriler:
 - Wooldridge, M. *An Introduction to MultiAgent Systems*
 - FIPA standartlari: `http://www.fipa.org/`
 - CrewAI dokumantasyonu: `https://docs.crewai.com/`
-- GitHub repo: `https://github.com/Shubuo/crewai-todo-app`
-
-## Kapanis Mesaji
-
-Single-agent baseline, Multi-Agent sisteme gecisin neden gerekli oldugunu gosteren pratik bir ilk adimdir.
+- Repository temeli: `https://github.com/Shubuo/crewai-todo-app`

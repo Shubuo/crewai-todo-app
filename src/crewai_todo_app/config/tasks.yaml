@@ -1,22 +1,36 @@
-generate_todo_app_task:
+generate_drone_checklist_app_task:
   description: >
-    Build the first single-agent baseline for {project_name}. Generate a complete
-    Python Flask application and save it as {output_file}. The output must be a
-    single file containing the backend plus the HTML, CSS, and JavaScript needed
-    for the UI.
+    Build the Phase 1 single-agent baseline for {project_name}. Generate a
+    complete Python Flask application and save it as {output_file}. The output
+    must be a single file containing the backend plus the HTML, CSS, and
+    JavaScript needed for a simple Turkish UI.
 
     Requirements:
     - Use Flask for the web server.
     - Use SQLite for persistence.
-    - Support full CRUD operations for todos.
-    - Each todo must include id, title, completed, and created_at fields.
-    - Include routes or APIs for create, read, update, and delete.
-    - Include a simple usable browser UI for adding, listing, editing, toggling,
-      and deleting todos.
+    - Model the product as a reusable checklist template plus per-flight sessions.
+    - Each new flight must create a fresh checklist instance based on the same
+      template items.
+    - Keep the UI intentionally simple and single-page.
+    - The UI language must be Turkish.
+    - Include these operational sections:
+      - Ortam Kontrolu
+      - Ucus Oncesi
+      - Ucus Sirasinda
+      - Acil Durum Prosedurleri
+      - Ucus Sonrasi
+    - Treat Acil Durum Prosedurleri as a reference panel, not as normal
+      checkboxes that must be completed during every flight.
+    - Persist historical flight sessions so past flights can be reviewed.
+    - Include routes or APIs for starting a flight session, reading the active
+      session, updating checklist item completion, closing a session, listing
+      flight history, and reading emergency reference items.
+    - Seed the database with sensible default drone checklist items for each
+      section.
     - Keep the implementation self-contained and runnable with `python {output_file}`.
     - Prefer clear, maintainable code over unnecessary abstractions.
     - Return only raw Python source code with no markdown fences and no extra commentary.
   expected_output: >
-    A complete runnable Python source file for a single-file Flask Todo App with
-    SQLite persistence, ready to be written directly to {output_file}.
+    A complete runnable Python source file for a single-file Flask drone flight
+    checklist app with SQLite persistence, ready to be written directly to {output_file}.
   agent: full_stack_developer

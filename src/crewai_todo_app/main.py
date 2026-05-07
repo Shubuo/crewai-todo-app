@@ -4,7 +4,7 @@ import warnings
 
 from dotenv import load_dotenv
 
-from crewai_todo_app.crew import CrewAITodoApp
+from crewai_todo_app.crew import CrewAIDroneChecklistApp
 
 load_dotenv()
 
@@ -13,8 +13,8 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 def _default_inputs() -> dict[str, str]:
     return {
-        "project_name": "CrewAI Todo App",
-        "output_file": "todo_app.py",
+        "project_name": "Drone Flight Checklist App",
+        "output_file": "drone_checklist_app.py",
     }
 
 
@@ -23,7 +23,7 @@ def run():
     inputs = _default_inputs()
 
     try:
-        CrewAITodoApp().crew().kickoff(inputs=inputs)
+        CrewAIDroneChecklistApp().crew().kickoff(inputs=inputs)
     except Exception as e:
         raise Exception(f"An error occurred while running the crew: {e}")
 
@@ -33,7 +33,7 @@ def train():
     inputs = _default_inputs()
 
     try:
-        CrewAITodoApp().crew().train(n_iterations=int(sys.argv[1]), filename=sys.argv[2], inputs=inputs)
+        CrewAIDroneChecklistApp().crew().train(n_iterations=int(sys.argv[1]), filename=sys.argv[2], inputs=inputs)
     except Exception as e:
         raise Exception(f"An error occurred while training the crew: {e}")
 
@@ -41,7 +41,7 @@ def train():
 def replay():
     """Replay the crew execution from a specific task."""
     try:
-        CrewAITodoApp().crew().replay(task_id=sys.argv[1])
+        CrewAIDroneChecklistApp().crew().replay(task_id=sys.argv[1])
     except Exception as e:
         raise Exception(f"An error occurred while replaying the crew: {e}")
 
@@ -51,7 +51,7 @@ def test():
     inputs = _default_inputs()
 
     try:
-        CrewAITodoApp().crew().test(n_iterations=int(sys.argv[1]), eval_llm=sys.argv[2], inputs=inputs)
+        CrewAIDroneChecklistApp().crew().test(n_iterations=int(sys.argv[1]), eval_llm=sys.argv[2], inputs=inputs)
     except Exception as e:
         raise Exception(f"An error occurred while testing the crew: {e}")
 
@@ -72,7 +72,7 @@ def run_with_trigger():
     inputs["crewai_trigger_payload"] = trigger_payload
 
     try:
-        result = CrewAITodoApp().crew().kickoff(inputs=inputs)
+        result = CrewAIDroneChecklistApp().crew().kickoff(inputs=inputs)
         return result
     except Exception as e:
         raise Exception(f"An error occurred while running the crew with trigger: {e}")

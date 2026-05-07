@@ -130,18 +130,18 @@
       background: #f8faff;
     }
 
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      align-items: start;
-    }
-
     .panel {
       padding: 22px;
       background: #f8faff;
       border: 1px solid var(--line);
       border-radius: 18px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
     }
 
     pre {
@@ -158,10 +158,6 @@
 
     code {
       font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-    }
-
-    .small {
-      font-size: 18px;
     }
 
     @media print {
@@ -195,11 +191,11 @@
       <div class="label">Slayt 1</div>
       <h1>MULTIAGENT SYSTEMS</h1>
       <p class="lead">Grup 4 Sunumu</p>
-      <p class="lead">Proje: Single vs Multi-Agent Karsilastirmali TODO Uygulamasi</p>
+      <p class="lead">Proje: Faz 1 Single-Agent Drone Flight Checklist Uygulamasi</p>
       <ul>
         <li>Framework: CrewAI</li>
         <li>Kuramsal temel: Wooldridge + FIPA standartlari</li>
-        <li>Vaka calismasi: <code>Shubuo/crewai-todo-app</code></li>
+        <li>Vaka calismasi: todo baseline'inin drone checklist urunune pivot edilmesi</li>
       </ul>
     </section>
 
@@ -207,314 +203,272 @@
       <div class="label">Slayt 2</div>
       <h2>Sunum Akisi</h2>
       <ol>
-        <li>MAS Teorisi ve CrewAI Mimarisi</li>
-        <li>FIPA Standartlari ile CrewAI Entegrasyonu</li>
-        <li>Hafiza ve Hata Yonetimi</li>
-        <li>Uygulama: Single Agent Case Study ve Multi-Agent gecis motivasyonu</li>
+        <li>MAS teorisi ve CrewAI mimarisi</li>
+        <li>FIPA ve ajan koordinasyonu</li>
+        <li>Hafiza, hata yonetimi ve insan onayi</li>
+        <li>Faz 1 case study: Drone checklist pivotu</li>
       </ol>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 3</div>
-      <h2>BOLUM 1</h2>
-      <p class="lead">MAS Teorisi ve CrewAI Mimarisi</p>
-      <p>Wooldridge'in akademik temelleri ile CrewAI'in eslestirilmesi</p>
-    </section>
-
-    <section class="slide">
-      <div class="label">Slayt 4</div>
-      <h2>1.1 Ajan Kavrami ve BDI Modeli</h2>
+      <h2>1. Ajan Kavrami ve BDI</h2>
       <ul>
-        <li>Ozerklik: Kendi kararlarini verir</li>
-        <li>Sosyal yetenek: Diger ajanlarla iletisim kurabilir</li>
-        <li>Reaktiflik: Cevreyi algilar ve tepki verir</li>
-        <li>Proaktiflik: Hedef odakli davranir</li>
+        <li>Ozerklik</li>
+        <li>Sosyal yetenek</li>
+        <li>Reaktiflik</li>
+        <li>Proaktiflik</li>
       </ul>
       <div class="panel">
         <h3>BDI</h3>
         <ul>
-          <li>Belief: Dunya hakkindaki bilgi</li>
-          <li>Desire: Ulasmak istedigi hedefler</li>
-          <li>Intention: Gerceklestirmeye karar verdigi eylemler</li>
+          <li>Belief: dunya bilgisi</li>
+          <li>Desire: hedef</li>
+          <li>Intention: gorev plani</li>
         </ul>
       </div>
     </section>
 
     <section class="slide">
-      <div class="label">Slayt 5</div>
+      <div class="label">Slayt 4</div>
       <h2>BDI -> CrewAI Eslesmesi</h2>
       <table>
-        <tr><th>BDI</th><th>CrewAI Karsiligi</th></tr>
-        <tr><td>Belief</td><td><code>backstory</code> ve gerekiyorsa <code>memory</code></td></tr>
+        <tr><th>BDI</th><th>CrewAI karsiligi</th></tr>
+        <tr><td>Belief</td><td><code>backstory</code> ve gerekirse <code>memory</code></td></tr>
         <tr><td>Desire</td><td><code>goal</code></td></tr>
-        <tr><td>Intention</td><td><code>task</code> tanimi</td></tr>
+        <tr><td>Intention</td><td><code>task</code></td></tr>
       </table>
       <pre><code>Agent(
   role="Full-Stack Developer",
-  goal="Produce a complete, runnable Todo App",
-  backstory="Pragmatic engineer who values clean code",
+  goal="Produce a runnable drone flight checklist app",
+  backstory="Pragmatic engineer who ships small usable products",
 )</code></pre>
     </section>
 
     <section class="slide">
-      <div class="label">Slayt 6</div>
-      <h2>1.2 CrewAI'in Yapi Taslari</h2>
+      <div class="label">Slayt 5</div>
+      <h2>CrewAI'in Yapi Taslari</h2>
       <ul>
-        <li><code>Agents</code>: Rol tabanli uzmanlar</li>
-        <li><code>Tasks</code>: Tanimli is birimleri</li>
-        <li><code>Tools</code>: Ajanin dis dunya ile temas noktasi</li>
-        <li><code>Crew</code>: Sistemi baslatan ve yoneten orkestra</li>
+        <li><code>Agents</code>: rol tabanli uzmanlar</li>
+        <li><code>Tasks</code>: tanimli is birimleri</li>
+        <li><code>Tools</code>: dis dunya ile temas noktasi</li>
+        <li><code>Crew</code>: akisi yoneten orkestra</li>
       </ul>
-      <h2>1.3 Surec Yonetimi</h2>
-      <div class="two-col">
-        <div class="panel">
-          <h3>Sequential</h3>
-          <ul>
-            <li>Klasik pipeline</li>
-            <li>Her task bir oncekinin ciktisini alir</li>
-            <li>Mevcut projede kullanilan yontem</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h3>Hierarchical</h3>
-          <ul>
-            <li>Manager Agent sistemi yonetir</li>
-            <li>Dinamik is dagitimi saglar</li>
-            <li>Daha esnek ama daha karmasiktir</li>
-          </ul>
-        </div>
+      <p class="lead">Faz 1 bilerek tek agent + tek ana task + sequential process olarak tutulur.</p>
+    </section>
+
+    <section class="slide">
+      <div class="label">Slayt 6</div>
+      <h2>FIPA ile Baglanti</h2>
+      <ul>
+        <li>kimlik ve yasam dongusu</li>
+        <li>yetenek tanitimi</li>
+        <li>mesajlasma davranislari</li>
+      </ul>
+      <div class="panel">
+        <p class="lead">CrewAI tarafinda agent listesi, task akisi ve tools yapisi FIPA kavramlariyla kolayca eslestirilebilir.</p>
       </div>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 7</div>
-      <h2>BOLUM 2</h2>
-      <p class="lead">FIPA Standartlari ile CrewAI Entegrasyonu</p>
-      <p>Projenin akademik derinligini gostermek</p>
+      <h2>FIPA ACL -> Task Context</h2>
+      <ul>
+        <li><code>REQUEST</code></li>
+        <li><code>INFORM</code></li>
+        <li><code>REFUSE</code></li>
+        <li><code>FAILURE</code></li>
+      </ul>
+      <pre><code>Task(
+  description="Checklist uygulamasini uret",
+  context=[planning_task]
+)</code></pre>
+      <p>Bir task'in output'u sonraki task'in girdisine donusebilir.</p>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 8</div>
-      <h2>2.1 FIPA Nedir?</h2>
-      <ul>
-        <li>Foundation for Intelligent Physical Agents</li>
-        <li>Ajan sistemleri icin uluslararasi standartlar sunar</li>
-        <li>Ajanlarin iletisimini, kimligini ve hizmet tanitimini tanimlar</li>
-      </ul>
-      <h2>2.2 Yasam Dongusu ve Kayit</h2>
-      <p>FIPA'da AMS agent kaydini ve yasam dongusunu takip eder.</p>
-      <pre><code>Crew(agents=[developer, tester, reviewer])</code></pre>
-      <p class="small">Bu liste, White Pages mantigina benzetilebilir.</p>
+      <h2>Hafiza ve Hata Yonetimi</h2>
+      <div class="two-col">
+        <div class="panel">
+          <h3>Hafiza</h3>
+          <ul>
+            <li>Short-term memory baglami korur</li>
+            <li>Long-term memory tekrar kullanimi destekler</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Guvenilirlik</h3>
+          <ul>
+            <li>Retry ile oz-duzeltme</li>
+            <li>Human-in-the-loop ile kritik onay</li>
+          </ul>
+        </div>
+      </div>
+      <pre><code>Crew(memory=True)
+Agent(max_retry_limit=3)
+Task(human_input=True)</code></pre>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 9</div>
-      <h2>2.3 Yeteneklerin Kesfi</h2>
-      <p>FIPA'da DF, "kim ne yapabilir" bilgisini tutar.</p>
-      <pre><code>Agent(tools=[search_tool, code_tool, db_tool])</code></pre>
-      <p class="small"><code>tools</code> listesi, FIPA'daki Yellow Pages benzeri dusunulebilir.</p>
-
-      <h2>2.4 Ajanlar Arasi Iletisim</h2>
+      <h2>Faz 1 Case Study Baslangici</h2>
       <ul>
-        <li>REQUEST</li>
-        <li>INFORM</li>
-        <li>REFUSE</li>
-        <li>FAILURE</li>
+        <li>mevcut repo tek agentli CrewAI baseline idi</li>
+        <li>cikti tek dosya Flask uygulamasiydi</li>
+        <li>veri modeli basit todo listesi uzerine kuruluydu</li>
+        <li>hedef artik operasyonel bir drone checklist urunu</li>
       </ul>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 10</div>
-      <h2>FIPA ACL -> CrewAI Context Passing</h2>
-      <pre><code>Task(
-  description="Backend kodunu yaz",
-  context=[planning_task]
-)</code></pre>
+      <h2>Mevcut Repo Mimarisi</h2>
+      <pre><code>src/crewai_todo_app/
+  config/
+    agents.yaml
+    tasks.yaml
+  crew.py
+  main.py
+drone_checklist_app.py</code></pre>
       <ul>
-        <li>Bir task'in output'u sonraki task'in input'u olur</li>
-        <li>Bu, mesaj yukunun bir task'tan digerine aktarilmasina benzer</li>
+        <li><code>full_stack_developer</code> tek agent'tir</li>
+        <li>gorev tek dosya Flask + SQLite uygulamasi uretmektir</li>
+        <li>process sequential olsa da pratikte tek adimli akistir</li>
       </ul>
-      <p class="small">Sunum notu: FIPA diyagrami ile bu kodu yan yana koy.</p>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 11</div>
-      <h2>BOLUM 3</h2>
-      <p class="lead">Hafiza ve Hata Yonetimi</p>
-      <p>Sistemin sadece calismasini degil, akilli calismasini saglayan mekanizmalar</p>
+      <h2>Neden Todo Yeterli Degildi?</h2>
+      <ul>
+        <li>checklist her ucusta sifirlanmiyordu</li>
+        <li>faz bazli akis yoktu</li>
+        <li>ortam kontrolu ayri bolum degildi</li>
+        <li>acil durum bilgileri referans olarak sunulmuyordu</li>
+        <li>gecmis ucuslar session mantigiyla tutulmuyordu</li>
+      </ul>
+      <p class="emphasis">Global todo modeli, ucus bazli operasyon mantigina uymadi.</p>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 12</div>
-      <h2>3.1 Hafiza Sistemleri</h2>
-      <div class="two-col">
-        <div class="panel">
-          <h3>Short-term Memory</h3>
-          <ul>
-            <li>Gorev sirasinda ogrenilen bilgiler</li>
-            <li>Baglami kisa sureli korur</li>
-            <li>Ornek: "Bu app Flask kullaniyor" bilgisi</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h3>Long-term Memory</h3>
-          <ul>
-            <li>Onceki oturumlardan veri tasir</li>
-            <li>RAG ve vector DB ile calisabilir</li>
-            <li>Ornek: Benzer bug cozumunu hatirlamak</li>
-          </ul>
-        </div>
-      </div>
-      <pre><code>Crew(memory=True)
-Crew(memory=True, embedder={...})</code></pre>
+      <h2>Faz 1 Pivot Kararlari</h2>
+      <ul>
+        <li>Paket adi ayni kaldi: <code>crewai_todo_app</code></li>
+        <li>Uygulama cikti adi degisti: <code>drone_checklist_app.py</code></li>
+        <li>UI Turkce olacak</li>
+        <li>UI tek sayfa ve sade kalacak</li>
+        <li>Sadece single-agent uygulanacak</li>
+      </ul>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 13</div>
-      <h2>3.2 Hata Yonetimi ve Oz-Duzeltme</h2>
+      <h2>Yeni Urun Akisi</h2>
       <ol>
-        <li>Agent bir tool cagirir</li>
-        <li>Tool hata dondurur</li>
-        <li>Agent hatayi analiz eder</li>
-        <li>Yeni stratejiyle tekrar dener</li>
-        <li>Sinira ulasinca gorevi basarisiz isaretler</li>
+        <li>Kullanici yeni ucus baslatir</li>
+        <li>Sistem sablon checklist'i oturuma kopyalar</li>
+        <li>Maddeler fazlara gore tamamlanir</li>
+        <li>Acil durum prosedurleri referans panelinde gorulur</li>
+        <li>Ucus sonrasinda oturum kapatilir</li>
+        <li>Gecmis ucuslar saklanir</li>
       </ol>
-      <p>TODO App ornegi: SQLite baglantisi hata verirse agent yolu veya parametreyi duzeltip tekrar deneyebilir.</p>
-      <pre><code>Agent(max_retry_limit=3)</code></pre>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 14</div>
-      <h2>3.3 Human-in-the-Loop</h2>
+      <h2>Checklist Fazlari</h2>
       <ul>
-        <li>Geri donusu olmayan islemler</li>
-        <li>Belirsiz karar noktalarinda tercih gereksinimi</li>
-        <li>Guvenlik gerektiren durumlar</li>
+        <li><code>Ortam Kontrolu</code></li>
+        <li><code>Ucus Oncesi</code></li>
+        <li><code>Ucus Sirasinda</code></li>
+        <li><code>Acil Durum Prosedurleri</code></li>
+        <li><code>Ucus Sonrasi</code></li>
       </ul>
-      <ol>
-        <li>Agent kritik noktaya gelir</li>
-        <li>Durur ve onay ister</li>
-        <li>Onaya gore devam eder veya alternatif arar</li>
-      </ol>
-      <pre><code>Task(human_input=True)</code></pre>
+      <p class="lead">Acil Durum Prosedurleri, checkbox listesi degil referans panelidir.</p>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 15</div>
-      <h2>BOLUM 4</h2>
-      <p class="lead">Uygulama - Single Agent Case Study</p>
-      <p>Mevcut projenin analizi ve Multi-Agent'a gecisin motivasyonu</p>
+      <h2>Veri Modeli</h2>
+      <ul>
+        <li><code>checklist_templates</code></li>
+        <li><code>flight_sessions</code></li>
+        <li><code>session_items</code></li>
+      </ul>
+      <div class="panel">
+        <p class="lead">Ayni maddeler tekrar kullanilir, tamamlanma durumu ise ucusa ozel tutulur.</p>
+      </div>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 16</div>
-      <h2>4.1 Mevcut Projenin Mimarisi</h2>
-      <p>Repository: <code>https://github.com/Shubuo/crewai-todo-app</code></p>
-      <pre><code>src/crewai_todo_app/
-├── config/
-│   ├── agents.yaml
-│   └── tasks.yaml
-├── crew.py
-└── main.py</code></pre>
+      <h2>Faz 1 Single-Agent Akisi</h2>
       <ul>
-        <li>Agent: <code>full_stack_developer</code></li>
-        <li>Model: <code>minimax-m2.7</code> (OpenRouter uzerinden)</li>
-        <li>Gorev: Flask + SQLite + HTML/CSS/JS tek dosyada Todo App yazmak</li>
-        <li>Process: Sequential</li>
+        <li>Flask backend</li>
+        <li>SQLite veri modeli</li>
+        <li>Turkce UI</li>
+        <li>seed checklist verisi</li>
+        <li>session bazli workflow</li>
       </ul>
+      <p>Faz 1'in amaci once dogru urun modelini netlestirmektir.</p>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 17</div>
-      <h2>Single-Agent Baseline'da Uretilen Uygulama</h2>
+      <h2>Basit UI Karari</h2>
       <ul>
-        <li>Cikti dosyasi: <code>todo_app.py</code></li>
-        <li>Flask API endpoint'leri uretildi</li>
-        <li>SQLite persistence kuruldu</li>
-        <li>Inline HTML/CSS/JS arayuz uretildi</li>
-        <li>CRUD akislarinin tamami calisir hale geldi</li>
+        <li>aktif ucus karti</li>
+        <li>yeni ucus baslatma formu</li>
+        <li>faz bazli checklist bolumleri</li>
+        <li>acil durum referans paneli</li>
+        <li>gecmis ucuslar listesi</li>
       </ul>
-      <p>Refinement turunda JSON dogrulamasi, boolean standardizasyonu ve <code>created_at</code> gosterimi eklendi.</p>
+      <p>Bilerek eklenmeyenler: kullanici sistemi, coklu drone profili, karmasik dashboard.</p>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 18</div>
-      <h2>4.2 Single Agent'in Sinirlamalari</h2>
+      <h2>Faz 1 Dosya Ciktilari</h2>
       <ul>
-        <li>Tek agent backend, frontend, veri modeli ve testi ayni anda dusunuyor</li>
-        <li>Dikkat dagildiginda eksik veya hatali kod uretebiliyor</li>
-        <li>Kod kalitesi butun kisimlarda esit olmuyor</li>
-        <li>Ayri bir review ve test rolu yok</li>
-        <li>Bu baseline'da memory kullanimi da yok</li>
+        <li><code>drone_checklist_app.py</code></li>
+        <li><code>PHASE1_DRONE_CHECKLIST_PLAN.md</code></li>
+        <li>guncel <code>README.md</code></li>
+        <li>guncel sunum dosyalari</li>
       </ul>
-      <p class="emphasis">Tek agent = Tek dikkat noktasi = Karmasik gorevlerde performans dususu</p>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 19</div>
-      <h2>4.3 Sorunlarin Gorsel Kaniti</h2>
-      <ul>
-        <li>Ekran goruntusu 1: Single agent ciktisi veya ilk ham kod</li>
-        <li>Ekran goruntusu 2: Hata mesaji ya da tutarsiz output</li>
-        <li>Ekran goruntusu 3: CrewAI terminal ciktisi</li>
-      </ul>
-      <p>Sunum teknigi: Once problemi goster, sonra "neden yetersiz?" sorusunu sor, cevabi bir sonraki slaytta ver.</p>
+      <h2>Faz 1 Kabul Kriterleri</h2>
+      <ol>
+        <li>CrewAI yeni dosya adina yazar</li>
+        <li>Uygulama lokal olarak acilir</li>
+        <li>UI Turkcedir</li>
+        <li>Her ucus icin yeni checklist olusur</li>
+        <li>Gecmis ucuslar saklanir</li>
+        <li>Ortam Kontrolu ayri bolumdur</li>
+        <li>Acil Durum Prosedurleri referans panelidir</li>
+      </ol>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 20</div>
-      <h2>4.4 Buyuk Final Duyurusu</h2>
-      <p class="lead">"Bu sunumda Single Agent'in neden yetersiz kaldigini gorduk."</p>
-      <p class="lead">"Final projemizde, CrewAI kullanarak tasarladigimiz Multi-Agent sistemin bu problemleri nasil cozdugunu ve ikisi arasindaki performans farkini canli verilerle sunacagiz."</p>
+      <h2>Kapanis</h2>
+      <p class="lead">Bu fazda amac Multi-Agent'i kurmak degil, dogru urun modelini single-agent ile netlestirmektir.</p>
+      <p class="lead">Sonraki mantikli adim, ayni urunu uzmanlasmis agent'lara bolmektir.</p>
     </section>
 
     <section class="slide">
       <div class="label">Slayt 21</div>
-      <h2>Multi-Agent Final Projesi Onizlemesi</h2>
-      <ul>
-        <li>Product Planner Agent</li>
-        <li>Backend Developer Agent</li>
-        <li>Frontend Developer Agent</li>
-        <li>Test Agent</li>
-        <li>Review Agent</li>
-      </ul>
-      <h3>Karsilastirma metrikleri</h3>
-      <ul>
-        <li>Kod kalitesi</li>
-        <li>Tamamlanma suresi</li>
-        <li>Cikti tutarliligi</li>
-        <li>Token kullanimi</li>
-      </ul>
-    </section>
-
-    <section class="slide">
-      <div class="label">Slayt 22</div>
-      <h2>Genel Sunum Notlari</h2>
-      <ul>
-        <li>Akis: Bolum 1 -> Bolum 2 -> Bolum 3 -> Bolum 4</li>
-        <li>Her bolum icin 5-7 dakika</li>
-        <li>Toplam sure: 20-28 dakika</li>
-      </ul>
-      <h3>Gorsel oneriler</h3>
-      <ul>
-        <li>BDI <-> CrewAI eslestirme tablosu</li>
-        <li>FIPA diyagrami ile CrewAI kodu yan yana</li>
-        <li>Memory turleri diyagrami</li>
-        <li>Single vs Multi-Agent mimari semasi</li>
-        <li>Terminal ciktilari ekran goruntuleri</li>
-      </ul>
-    </section>
-
-    <section class="slide">
-      <div class="label">Slayt 23</div>
       <h2>Referanslar</h2>
       <ul>
         <li>Wooldridge, M. <em>An Introduction to MultiAgent Systems</em></li>
         <li>FIPA standartlari: <code>http://www.fipa.org/</code></li>
         <li>CrewAI dokumantasyonu: <code>https://docs.crewai.com/</code></li>
-        <li>GitHub repo: <code>https://github.com/Shubuo/crewai-todo-app</code></li>
+        <li>Repository temeli: <code>https://github.com/Shubuo/crewai-todo-app</code></li>
       </ul>
-      <p class="emphasis">Single-agent baseline, Multi-Agent sisteme gecisin neden gerekli oldugunu gosteren pratik bir ilk adimdir.</p>
     </section>
   </div>
 </body>

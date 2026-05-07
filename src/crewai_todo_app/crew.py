@@ -4,8 +4,8 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 
 @CrewBase
-class CrewAITodoApp:
-    """CrewAI Todo App crew."""
+class CrewAIDroneChecklistApp:
+    """CrewAI drone checklist crew."""
 
     agents: List[BaseAgent]
     tasks: List[Task]
@@ -18,15 +18,15 @@ class CrewAITodoApp:
         )
 
     @task
-    def generate_todo_app_task(self) -> Task:
+    def generate_drone_checklist_app_task(self) -> Task:
         return Task(
-            config=self.tasks_config["generate_todo_app_task"],  # type: ignore[index]
-            output_file="todo_app.py"
+            config=self.tasks_config["generate_drone_checklist_app_task"],  # type: ignore[index]
+            output_file="drone_checklist_app.py"
         )
 
     @crew
     def crew(self) -> Crew:
-        """Creates the CrewAI Todo App crew."""
+        """Creates the CrewAI drone checklist crew."""
         return Crew(
             agents=self.agents,
             tasks=self.tasks,
