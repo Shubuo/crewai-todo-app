@@ -1,0 +1,383 @@
+SLAYT 1
+MULTIAGENT SYSTEMS
+CrewAI ile Drone Flight Checklist App
+
+Gorsel: assets/01-cover-drone-checklist.png
+
+---
+
+SLAYT 2
+Sunum Akisi
+
+Konusmaci 1: MAS teorisi ve CrewAI
+Odak: Ajan, BDI, process
+
+Konusmaci 2: FIPA ve guvenilirlik
+Odak: AMS, DF, ACL, memory, HITL
+
+Konusmaci 3: Uygulama case study
+Odak: Drone checklist app, veri modeli, API, sonuc
+
+Gorsel: assets/02-three-speaker-flow.png
+
+---
+
+SLAYT 3
+Konusmaci 1
+MAS Teorisi ve CrewAI Mimarisi
+
+Bu bolumde:
+- ajan kavrami
+- BDI modeli
+- CrewAI yapi taslari
+- process yonetimi
+
+---
+
+SLAYT 4
+Ajan Kavrami
+
+Wooldridge'e gore ajan, cevresiyle etkilesen ve hedef odakli davranan otonom bir yazilim birimidir.
+
+- Ozerklik: kendi kararlarini verir
+- Sosyal yetenek: diger ajanlarla iletisim kurabilir
+- Reaktiflik: cevresel degisime tepki verir
+- Proaktiflik: hedefe ulasmak icin inisiyatif alir
+
+---
+
+SLAYT 5
+BDI Modeli
+
+BDI: Belief, Desire, Intention
+
+Belief:
+Ajanin bildikleri
+CrewAI karsiligi: backstory, memory
+
+Desire:
+Ulasilmak istenen hedef
+CrewAI karsiligi: goal
+
+Intention:
+Secilen eylem plani
+CrewAI karsiligi: task
+
+Gorsel: assets/03-bdi-crewai-mapping.png
+
+---
+
+SLAYT 6
+CrewAI Agent Ornegi
+
+Kod ornegi:
+
+Agent(
+    role="Full-Stack Developer",
+    goal="Produce a runnable drone flight checklist app",
+    backstory="Pragmatic engineer who ships small usable products",
+)
+
+Bu tanimda:
+- role: ajanin uzmanligi
+- goal: uretilecek sonuc
+- backstory: davranis tarzi ve baglam
+
+---
+
+SLAYT 7
+CrewAI Yapi Taslari
+
+- Agents: rol tabanli uzmanlar
+- Tasks: tanimli is paketleri
+- Tools: dis dunya ile temas noktasi
+- Crew: agent ve task akisini yoneten orkestra
+
+Gorsel: assets/04-crewai-building-blocks.png
+
+---
+
+SLAYT 8
+Process Yonetimi
+
+Sequential:
+- task'lar sirayla calisir
+- onceki cikti sonraki adima aktarilir
+- Faz 1 icin kontrollu ve sade yontemdir
+
+Hierarchical:
+- manager agent is dagitimi yapar
+- daha esnek ama daha karmasiktir
+
+Gorsel: assets/05-sequential-vs-hierarchical.png
+
+---
+
+SLAYT 9
+Konusmaci 2
+FIPA, Hafiza ve Guvenilirlik
+
+Bu bolumde:
+- FIPA standartlari
+- AMS ve DF kavramlari
+- FIPA ACL ile CrewAI context benzetmesi
+- memory, retry ve human-in-the-loop
+
+---
+
+SLAYT 10
+FIPA Nedir?
+
+FIPA, ajan sistemleri icin ortak standart ve kavramsal sozluk sunar.
+
+- ajanlarin kimlik ve yasam dongusu
+- ajan yeteneklerinin tanitimi
+- ajanlar arasi mesajlasma
+- hata ve basarisizlik durumlarinin ifade edilmesi
+
+CrewAI bu fikirleri pratik bir agent/task/tool modeline tasir.
+
+---
+
+SLAYT 11
+FIPA -> CrewAI Karsiliklari
+
+FIPA kavrami: AMS / White Pages
+CrewAI karsiligi: Crew(agents=[...])
+
+FIPA kavrami: DF / Yellow Pages
+CrewAI karsiligi: Agent(tools=[...])
+
+FIPA kavrami: ACL mesajlari
+CrewAI karsiligi: Task output ve context akisi
+
+Gorsel: assets/06-fipa-crewai-mapping.png
+
+---
+
+SLAYT 12
+FIPA ACL ve CrewAI Context
+
+Temel speech act fikirleri:
+- REQUEST: bir is isteme
+- INFORM: bilgi aktarma
+- REFUSE: isi yapamama
+- FAILURE: basarisiz deneme
+
+CrewAI'de task ciktisi, baska bir task icin context olabilir.
+
+Gorsel: assets/07-fipa-acl-context-flow.png
+
+---
+
+SLAYT 13
+Memory Sistemleri
+
+Short-term memory:
+- gorev sirasindaki baglami korur
+- o oturumdaki bilgileri kullanir
+
+Long-term memory:
+- onceki deneyimlerden yararlanmayi hedefler
+- RAG ve vector database yaklasimlariyla iliskilidir
+
+Kod ornegi:
+Crew(memory=True)
+
+---
+
+SLAYT 14
+Retry ve Human-in-the-Loop
+
+- Retry: hata durumunda farkli stratejiyle tekrar deneme
+- Self-correction: hatayi okuyup davranisi duzeltme
+- Human-in-the-loop: kritik kararlarda insan onayi alma
+
+Kod ornegi:
+Agent(max_retry_limit=3)
+Task(human_input=True)
+
+Gorsel: assets/08-memory-retry-hitl.png
+
+---
+
+SLAYT 15
+Konusmaci 3
+Uygulama Case Study
+
+Bu bolumde:
+- mevcut uygulama mimarisi
+- drone checklist urun akisi
+- session bazli veri modeli
+- API ve UI kararlari
+- Faz 1 sonucu ve sonraki adim
+
+---
+
+SLAYT 16
+Faz 1 Uygulama Mimarisi
+
+Ana dosya:
+drone_checklist_app.py
+
+Tek dosyada:
+- Flask backend
+- SQLite persistence
+- inline HTML/CSS/JavaScript UI
+
+Gorsel: assets/09-app-architecture.png
+
+---
+
+SLAYT 17
+Drone Checklist Urun Akisi
+
+1. Kullanici yeni ucus baslatir
+2. Sistem checklist sablonunu oturuma kopyalar
+3. Kullanici faz bazli maddeleri tamamlar
+4. Acil durum prosedurlerini referans panelinden okur
+5. Ucus tamamlaninca oturum kapatilir
+6. Gecmis ucuslar saklanir
+
+Gorsel: assets/10-flight-session-flow.png
+
+---
+
+SLAYT 18
+Checklist Fazlari
+
+- Ortam Kontrolu
+- Ucus Oncesi
+- Ucus Sirasinda
+- Ucus Sonrasi
+- Acil Durum Prosedurleri
+
+Tasarim karari:
+Acil durum prosedurleri normal checkbox listesi degil, referans panelidir.
+
+Gorsel: assets/11-checklist-phases.png
+
+---
+
+SLAYT 19
+Veri Modeli
+
+Tablo: checklist_templates
+Gorev: Standart checklist maddelerini saklar
+
+Tablo: flight_sessions
+Gorev: Her ucus icin oturum kaydi tutar
+
+Tablo: session_items
+Gorev: O ucusa ait tamamlanma durumunu saklar
+
+Gorsel: assets/12-data-model-erd.png
+
+---
+
+SLAYT 20
+Session Mantigi
+
+Drone checklist her ucus icin temiz baslamalidir.
+
+Session modeli sayesinde:
+- her ucus ayri takip edilir
+- tamamlanma durumu ucusa ozel olur
+- gecmis ucuslar korunur
+- zorunlu maddeler tamamlanmadan ucus kapatilamaz
+
+---
+
+SLAYT 21
+API Akisi
+
+- GET /api/active-session
+- POST /api/sessions
+- GET /api/sessions/<id>/items
+- PUT /api/session-items/<id>
+- POST /api/sessions/<id>/close
+- GET /api/history
+- GET /api/reference-items
+
+Gorsel: assets/13-api-flow.png
+
+---
+
+SLAYT 22
+Basit Turkce UI
+
+UI bilerek sade tutuldu:
+- aktif ucus karti
+- yeni ucus baslatma formu
+- faz bazli checklist bolumleri
+- acil durum referans paneli
+- gecmis ucuslar listesi
+
+Gorsel: assets/14-ui-wireframe.png
+
+---
+
+SLAYT 23
+Dogrulama
+
+Yapilan kontroller:
+- Python compile kontrolu
+- Flask API smoke test
+- yeni session olusturma
+- checklist maddesi guncelleme
+- zorunlu maddeler bitmeden ucus kapatma engeli
+- history endpoint kontrolu
+
+Not:
+uv run bu makinede onnxruntime platform uyumsuzlugu nedeniyle takildi.
+
+---
+
+SLAYT 24
+Faz 1 Ciktilari
+
+- drone_checklist_app.py
+- drone_checklist.db
+- PHASE1_DRONE_CHECKLIST_PLAN.md
+- README.md
+- CREWAI sunum.md
+- CREWAI sunum.html
+- CREWAI sunum konusmaci notlari.md
+- assets/ altindaki PNG gorselleri
+
+---
+
+SLAYT 25
+Sonraki Adim
+
+Faz 2'de ayni urun multi-agent yapiya bolunebilir:
+
+- Operasyon Planlayici
+- Guvenlik ve Is Akisi Tasarimcisi
+- Arayuz Tasarimcisi
+- Full-Stack Gelistirici
+- QA Gozden Gecirici
+
+Gorsel: assets/15-phase2-roadmap.png
+
+---
+
+SLAYT 26
+Kapanis
+
+Bu calismada:
+- MAS teorisi CrewAI kavramlariyla eslestirildi
+- FIPA standartlari pratik agent/task yapisina baglandi
+- single-agent Faz 1 uygulamasi olusturuldu
+- drone checklist icin session bazli veri modeli kuruldu
+- sonraki multi-agent faz icin saglam referans cikti hazirlandi
+
+---
+
+SLAYT 27
+Referanslar
+
+- Wooldridge, M. An Introduction to MultiAgent Systems
+- FIPA standartlari: http://www.fipa.org/
+- CrewAI dokumantasyonu: https://docs.crewai.com/
+- Proje repository'si: yerel CrewAI uygulama repository'si

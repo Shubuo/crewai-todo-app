@@ -6,20 +6,18 @@
   <title>MultiAgent Systems - Grup 4 Sunumu</title>
   <style>
     :root {
-      --bg: #eff3f9;
+      --bg: #edf2f7;
       --card: #ffffff;
-      --ink: #162033;
-      --muted: #5d687b;
-      --line: #d7dfec;
-      --accent: #4338ca;
-      --accent-soft: #ecebff;
+      --ink: #102033;
+      --muted: #5c6b82;
+      --line: #d6deeb;
+      --accent: #2563eb;
+      --soft: #eaf2ff;
       --code: #111827;
       --code-ink: #e5eefc;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -30,7 +28,7 @@
     }
 
     .deck {
-      width: min(1200px, calc(100% - 48px));
+      width: min(1220px, calc(100% - 48px));
       margin: 32px auto;
     }
 
@@ -38,9 +36,9 @@
       margin-bottom: 20px;
       padding: 16px 20px;
       border-radius: 16px;
-      border: 1px solid #c8c4ff;
-      background: var(--accent-soft);
-      color: #2f2879;
+      background: var(--soft);
+      border: 1px solid #b8cdf5;
+      color: #1e3a8a;
       font-size: 15px;
     }
 
@@ -51,7 +49,7 @@
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: 24px;
-      box-shadow: 0 18px 48px rgba(22, 32, 51, 0.08);
+      box-shadow: 0 18px 48px rgba(16, 32, 51, 0.08);
       page-break-after: always;
       display: flex;
       flex-direction: column;
@@ -66,82 +64,42 @@
       color: var(--accent);
     }
 
-    h1,
-    h2,
-    h3 {
-      margin: 0;
-      line-height: 1.15;
-    }
+    h1, h2, h3 { margin: 0; line-height: 1.15; }
+    h1 { font-size: 42px; }
+    h2 { font-size: 34px; }
+    h3 { font-size: 24px; }
+    p { margin: 0; font-size: 22px; color: var(--muted); }
+    .lead { font-size: 26px; color: var(--ink); }
+    .emphasis { font-size: 28px; font-weight: 700; color: var(--accent); }
 
-    h1 {
-      font-size: 42px;
-    }
+    ul, ol { margin: 0; padding-left: 26px; font-size: 23px; }
+    li { margin: 10px 0; }
 
-    h2 {
-      font-size: 34px;
-    }
+    table { border-collapse: collapse; width: 100%; font-size: 20px; }
+    th, td { border: 1px solid var(--line); padding: 12px 14px; text-align: left; }
+    th { background: #f8faff; }
 
-    h3 {
-      font-size: 22px;
-    }
-
-    p {
-      margin: 0;
-      font-size: 22px;
-      color: var(--muted);
-    }
-
-    .lead {
-      font-size: 26px;
-      color: var(--ink);
-    }
-
-    .emphasis {
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-
-    ul,
-    ol {
-      margin: 0;
-      padding-left: 26px;
-      font-size: 23px;
-    }
-
-    li {
-      margin: 10px 0;
-    }
-
-    table {
-      border-collapse: collapse;
+    .visual {
       width: 100%;
-      font-size: 21px;
-    }
-
-    th,
-    td {
-      border: 1px solid var(--line);
-      padding: 12px 14px;
-      text-align: left;
-    }
-
-    th {
-      background: #f8faff;
-    }
-
-    .panel {
-      padding: 22px;
-      background: #f8faff;
-      border: 1px solid var(--line);
+      max-height: 330px;
+      object-fit: contain;
       border-radius: 18px;
+      border: 1px solid var(--line);
+      background: #fff;
     }
 
     .two-col {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      align-items: start;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 26px;
+      align-items: center;
+    }
+
+    .panel {
+      padding: 20px;
+      background: #f8faff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
     }
 
     pre {
@@ -156,320 +114,97 @@
       line-height: 1.45;
     }
 
-    code {
-      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    code { font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
+
+    @media (max-width: 900px) {
+      .deck { width: min(100% - 20px, 1220px); margin: 10px auto; }
+      .slide { padding: 26px; min-height: auto; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 34px; }
+      h2 { font-size: 28px; }
+      ul, ol, p { font-size: 19px; }
     }
 
     @media print {
-      body {
-        background: #fff;
-      }
-
-      .deck {
-        width: 100%;
-        margin: 0;
-      }
-
-      .helper {
-        display: none;
-      }
-
-      .slide {
-        margin: 0;
-        border: none;
-        border-radius: 0;
-        box-shadow: none;
-      }
+      body { background: #fff; }
+      .deck { width: 100%; margin: 0; }
+      .helper { display: none; }
+      .slide { margin: 0; border: none; border-radius: 0; box-shadow: none; }
     }
   </style>
 </head>
 <body>
   <div class="deck">
-    <div class="helper">Her beyaz kart bir slayt olarak hazirlandi. PowerPoint'e kart bazli kopyala-yapistir yapabilirsin.</div>
+    <div class="helper">Bu HTML sunum, `CREWAI sunum.md` ile ayni akisi takip eder. Konusmaci notlari ayri dosyada: `CREWAI sunum konusmaci notlari.md`.</div>
 
     <section class="slide">
       <div class="label">Slayt 1</div>
       <h1>MULTIAGENT SYSTEMS</h1>
-      <p class="lead">Grup 4 Sunumu</p>
-      <p class="lead">Proje: Faz 1 Single-Agent Drone Flight Checklist Uygulamasi</p>
-      <ul>
-        <li>Framework: CrewAI</li>
-        <li>Kuramsal temel: Wooldridge + FIPA standartlari</li>
-        <li>Vaka calismasi: todo baseline'inin drone checklist urunune pivot edilmesi</li>
-      </ul>
+      <p class="lead">CrewAI ile Drone Flight Checklist App</p>
+      <img class="visual" src="assets/01-cover-drone-checklist.png" alt="Drone checklist cover">
     </section>
 
     <section class="slide">
       <div class="label">Slayt 2</div>
       <h2>Sunum Akisi</h2>
-      <ol>
-        <li>MAS teorisi ve CrewAI mimarisi</li>
-        <li>FIPA ve ajan koordinasyonu</li>
-        <li>Hafiza, hata yonetimi ve insan onayi</li>
-        <li>Faz 1 case study: Drone checklist pivotu</li>
-      </ol>
+      <img class="visual" src="assets/02-three-speaker-flow.png" alt="Uc konusmaci akis">
+      <table><tr><th>Konusmaci</th><th>Bolum</th><th>Odak</th></tr><tr><td>1</td><td>MAS teorisi ve CrewAI</td><td>Ajan, BDI, process</td></tr><tr><td>2</td><td>FIPA ve guvenilirlik</td><td>AMS, DF, ACL, memory, HITL</td></tr><tr><td>3</td><td>Uygulama case study</td><td>Drone checklist app, veri modeli, API, sonuc</td></tr></table>
     </section>
 
-    <section class="slide">
-      <div class="label">Slayt 3</div>
-      <h2>1. Ajan Kavrami ve BDI</h2>
-      <ul>
-        <li>Ozerklik</li>
-        <li>Sosyal yetenek</li>
-        <li>Reaktiflik</li>
-        <li>Proaktiflik</li>
-      </ul>
-      <div class="panel">
-        <h3>BDI</h3>
-        <ul>
-          <li>Belief: dunya bilgisi</li>
-          <li>Desire: hedef</li>
-          <li>Intention: gorev plani</li>
-        </ul>
-      </div>
-    </section>
+    <section class="slide"><div class="label">Slayt 3</div><h2>Konusmaci 1</h2><p class="lead">MAS Teorisi ve CrewAI Mimarisi</p><ul><li>ajan kavrami</li><li>BDI modeli</li><li>CrewAI yapi taslari</li><li>process yonetimi</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 4</div>
-      <h2>BDI -> CrewAI Eslesmesi</h2>
-      <table>
-        <tr><th>BDI</th><th>CrewAI karsiligi</th></tr>
-        <tr><td>Belief</td><td><code>backstory</code> ve gerekirse <code>memory</code></td></tr>
-        <tr><td>Desire</td><td><code>goal</code></td></tr>
-        <tr><td>Intention</td><td><code>task</code></td></tr>
-      </table>
-      <pre><code>Agent(
-  role="Full-Stack Developer",
-  goal="Produce a runnable drone flight checklist app",
-  backstory="Pragmatic engineer who ships small usable products",
-)</code></pre>
-    </section>
+    <section class="slide"><div class="label">Slayt 4</div><h2>Ajan Kavrami</h2><p>Wooldridge'e gore ajan, cevresiyle etkilesen ve hedef odakli davranan otonom bir yazilim birimidir.</p><ul><li>Ozerklik: kendi kararlarini verir</li><li>Sosyal yetenek: diger ajanlarla iletisim kurabilir</li><li>Reaktiflik: cevresel degisime tepki verir</li><li>Proaktiflik: hedefe ulasmak icin inisiyatif alir</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 5</div>
-      <h2>CrewAI'in Yapi Taslari</h2>
-      <ul>
-        <li><code>Agents</code>: rol tabanli uzmanlar</li>
-        <li><code>Tasks</code>: tanimli is birimleri</li>
-        <li><code>Tools</code>: dis dunya ile temas noktasi</li>
-        <li><code>Crew</code>: akisi yoneten orkestra</li>
-      </ul>
-      <p class="lead">Faz 1 bilerek tek agent + tek ana task + sequential process olarak tutulur.</p>
-    </section>
+    <section class="slide"><div class="label">Slayt 5</div><h2>BDI Modeli</h2><img class="visual" src="assets/03-bdi-crewai-mapping.png" alt="BDI CrewAI mapping"><table><tr><th>BDI</th><th>Anlam</th><th>CrewAI karsiligi</th></tr><tr><td>Belief</td><td>Ajanin bildikleri</td><td><code>backstory</code>, <code>memory</code></td></tr><tr><td>Desire</td><td>Ulasilmak istenen hedef</td><td><code>goal</code></td></tr><tr><td>Intention</td><td>Secilen eylem plani</td><td><code>task</code></td></tr></table></section>
 
-    <section class="slide">
-      <div class="label">Slayt 6</div>
-      <h2>FIPA ile Baglanti</h2>
-      <ul>
-        <li>kimlik ve yasam dongusu</li>
-        <li>yetenek tanitimi</li>
-        <li>mesajlasma davranislari</li>
-      </ul>
-      <div class="panel">
-        <p class="lead">CrewAI tarafinda agent listesi, task akisi ve tools yapisi FIPA kavramlariyla kolayca eslestirilebilir.</p>
-      </div>
-    </section>
+    <section class="slide"><div class="label">Slayt 6</div><h2>CrewAI Agent Ornegi</h2><pre><code>Agent(
+    role="Full-Stack Developer",
+    goal="Produce a runnable drone flight checklist app",
+    backstory="Pragmatic engineer who ships small usable products",
+)</code></pre><ul><li><code>role</code>: ajanin uzmanligi</li><li><code>goal</code>: uretilecek sonuc</li><li><code>backstory</code>: davranis tarzi ve baglam</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 7</div>
-      <h2>FIPA ACL -> Task Context</h2>
-      <ul>
-        <li><code>REQUEST</code></li>
-        <li><code>INFORM</code></li>
-        <li><code>REFUSE</code></li>
-        <li><code>FAILURE</code></li>
-      </ul>
-      <pre><code>Task(
-  description="Checklist uygulamasini uret",
-  context=[planning_task]
-)</code></pre>
-      <p>Bir task'in output'u sonraki task'in girdisine donusebilir.</p>
-    </section>
+    <section class="slide"><div class="label">Slayt 7</div><h2>CrewAI Yapi Taslari</h2><img class="visual" src="assets/04-crewai-building-blocks.png" alt="CrewAI building blocks"><ul><li><code>Agents</code>: rol tabanli uzmanlar</li><li><code>Tasks</code>: tanimli is paketleri</li><li><code>Tools</code>: dis dunya ile temas noktasi</li><li><code>Crew</code>: agent ve task akisini yoneten orkestra</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 8</div>
-      <h2>Hafiza ve Hata Yonetimi</h2>
-      <div class="two-col">
-        <div class="panel">
-          <h3>Hafiza</h3>
-          <ul>
-            <li>Short-term memory baglami korur</li>
-            <li>Long-term memory tekrar kullanimi destekler</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h3>Guvenilirlik</h3>
-          <ul>
-            <li>Retry ile oz-duzeltme</li>
-            <li>Human-in-the-loop ile kritik onay</li>
-          </ul>
-        </div>
-      </div>
-      <pre><code>Crew(memory=True)
-Agent(max_retry_limit=3)
-Task(human_input=True)</code></pre>
-    </section>
+    <section class="slide"><div class="label">Slayt 8</div><h2>Process Yonetimi</h2><img class="visual" src="assets/05-sequential-vs-hierarchical.png" alt="Sequential vs hierarchical"><div class="two-col"><div><h3>Sequential</h3><ul><li>task'lar sirayla calisir</li><li>Faz 1 icin kontrollu ve sade yontemdir</li></ul></div><div><h3>Hierarchical</h3><ul><li>manager agent is dagitimi yapar</li><li>daha esnek ama daha karmasiktir</li></ul></div></div></section>
 
-    <section class="slide">
-      <div class="label">Slayt 9</div>
-      <h2>Faz 1 Case Study Baslangici</h2>
-      <ul>
-        <li>mevcut repo tek agentli CrewAI baseline idi</li>
-        <li>cikti tek dosya Flask uygulamasiydi</li>
-        <li>veri modeli basit todo listesi uzerine kuruluydu</li>
-        <li>hedef artik operasyonel bir drone checklist urunu</li>
-      </ul>
-    </section>
+    <section class="slide"><div class="label">Slayt 9</div><h2>Konusmaci 2</h2><p class="lead">FIPA, Hafiza ve Guvenilirlik</p><ul><li>FIPA standartlari</li><li>AMS ve DF kavramlari</li><li>FIPA ACL ve CrewAI context</li><li>memory, retry ve human-in-the-loop</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 10</div>
-      <h2>Mevcut Repo Mimarisi</h2>
-      <pre><code>src/crewai_todo_app/
-  config/
-    agents.yaml
-    tasks.yaml
-  crew.py
-  main.py
-drone_checklist_app.py</code></pre>
-      <ul>
-        <li><code>full_stack_developer</code> tek agent'tir</li>
-        <li>gorev tek dosya Flask + SQLite uygulamasi uretmektir</li>
-        <li>process sequential olsa da pratikte tek adimli akistir</li>
-      </ul>
-    </section>
+    <section class="slide"><div class="label">Slayt 10</div><h2>FIPA Nedir?</h2><p>FIPA, ajan sistemleri icin ortak standart ve kavramsal sozluk sunar.</p><ul><li>ajanlarin kimlik ve yasam dongusu</li><li>ajan yeteneklerinin tanitimi</li><li>ajanlar arasi mesajlasma</li><li>hata ve basarisizlik durumlarinin ifade edilmesi</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 11</div>
-      <h2>Neden Todo Yeterli Degildi?</h2>
-      <ul>
-        <li>checklist her ucusta sifirlanmiyordu</li>
-        <li>faz bazli akis yoktu</li>
-        <li>ortam kontrolu ayri bolum degildi</li>
-        <li>acil durum bilgileri referans olarak sunulmuyordu</li>
-        <li>gecmis ucuslar session mantigiyla tutulmuyordu</li>
-      </ul>
-      <p class="emphasis">Global todo modeli, ucus bazli operasyon mantigina uymadi.</p>
-    </section>
+    <section class="slide"><div class="label">Slayt 11</div><h2>FIPA -> CrewAI Karsiliklari</h2><img class="visual" src="assets/06-fipa-crewai-mapping.png" alt="FIPA CrewAI mapping"><table><tr><th>FIPA kavrami</th><th>CrewAI karsiligi</th></tr><tr><td>AMS / White Pages</td><td><code>Crew(agents=[...])</code></td></tr><tr><td>DF / Yellow Pages</td><td><code>Agent(tools=[...])</code></td></tr><tr><td>ACL mesajlari</td><td>Task output ve context akisi</td></tr></table></section>
 
-    <section class="slide">
-      <div class="label">Slayt 12</div>
-      <h2>Faz 1 Pivot Kararlari</h2>
-      <ul>
-        <li>Paket adi ayni kaldi: <code>crewai_todo_app</code></li>
-        <li>Uygulama cikti adi degisti: <code>drone_checklist_app.py</code></li>
-        <li>UI Turkce olacak</li>
-        <li>UI tek sayfa ve sade kalacak</li>
-        <li>Sadece single-agent uygulanacak</li>
-      </ul>
-    </section>
+    <section class="slide"><div class="label">Slayt 12</div><h2>FIPA ACL ve CrewAI Context</h2><img class="visual" src="assets/07-fipa-acl-context-flow.png" alt="FIPA ACL context"><ul><li><code>REQUEST</code>: bir is isteme</li><li><code>INFORM</code>: bilgi aktarma</li><li><code>REFUSE</code>: isi yapamama</li><li><code>FAILURE</code>: basarisiz deneme</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 13</div>
-      <h2>Yeni Urun Akisi</h2>
-      <ol>
-        <li>Kullanici yeni ucus baslatir</li>
-        <li>Sistem sablon checklist'i oturuma kopyalar</li>
-        <li>Maddeler fazlara gore tamamlanir</li>
-        <li>Acil durum prosedurleri referans panelinde gorulur</li>
-        <li>Ucus sonrasinda oturum kapatilir</li>
-        <li>Gecmis ucuslar saklanir</li>
-      </ol>
-    </section>
+    <section class="slide"><div class="label">Slayt 13</div><h2>Memory Sistemleri</h2><div class="two-col"><div class="panel"><h3>Short-term memory</h3><ul><li>gorev sirasindaki baglami korur</li><li>o oturumdaki bilgileri kullanir</li></ul></div><div class="panel"><h3>Long-term memory</h3><ul><li>onceki deneyimlerden yararlanmayi hedefler</li><li>RAG ve vector database ile iliskilidir</li></ul></div></div><pre><code>Crew(memory=True)</code></pre></section>
 
-    <section class="slide">
-      <div class="label">Slayt 14</div>
-      <h2>Checklist Fazlari</h2>
-      <ul>
-        <li><code>Ortam Kontrolu</code></li>
-        <li><code>Ucus Oncesi</code></li>
-        <li><code>Ucus Sirasinda</code></li>
-        <li><code>Acil Durum Prosedurleri</code></li>
-        <li><code>Ucus Sonrasi</code></li>
-      </ul>
-      <p class="lead">Acil Durum Prosedurleri, checkbox listesi degil referans panelidir.</p>
-    </section>
+    <section class="slide"><div class="label">Slayt 14</div><h2>Retry ve Human-in-the-Loop</h2><img class="visual" src="assets/08-memory-retry-hitl.png" alt="Memory retry HITL"><pre><code>Agent(max_retry_limit=3)
+Task(human_input=True)</code></pre></section>
 
-    <section class="slide">
-      <div class="label">Slayt 15</div>
-      <h2>Veri Modeli</h2>
-      <ul>
-        <li><code>checklist_templates</code></li>
-        <li><code>flight_sessions</code></li>
-        <li><code>session_items</code></li>
-      </ul>
-      <div class="panel">
-        <p class="lead">Ayni maddeler tekrar kullanilir, tamamlanma durumu ise ucusa ozel tutulur.</p>
-      </div>
-    </section>
+    <section class="slide"><div class="label">Slayt 15</div><h2>Konusmaci 3</h2><p class="lead">Uygulama Case Study</p><ul><li>mevcut uygulama mimarisi</li><li>drone checklist urun akisi</li><li>session bazli veri modeli</li><li>API ve UI kararlari</li><li>Faz 1 sonucu ve sonraki adim</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 16</div>
-      <h2>Faz 1 Single-Agent Akisi</h2>
-      <ul>
-        <li>Flask backend</li>
-        <li>SQLite veri modeli</li>
-        <li>Turkce UI</li>
-        <li>seed checklist verisi</li>
-        <li>session bazli workflow</li>
-      </ul>
-      <p>Faz 1'in amaci once dogru urun modelini netlestirmektir.</p>
-    </section>
+    <section class="slide"><div class="label">Slayt 16</div><h2>Faz 1 Uygulama Mimarisi</h2><img class="visual" src="assets/09-app-architecture.png" alt="App architecture"><ul><li><code>drone_checklist_app.py</code></li><li>Flask backend</li><li>SQLite persistence</li><li>inline HTML/CSS/JavaScript UI</li></ul></section>
 
-    <section class="slide">
-      <div class="label">Slayt 17</div>
-      <h2>Basit UI Karari</h2>
-      <ul>
-        <li>aktif ucus karti</li>
-        <li>yeni ucus baslatma formu</li>
-        <li>faz bazli checklist bolumleri</li>
-        <li>acil durum referans paneli</li>
-        <li>gecmis ucuslar listesi</li>
-      </ul>
-      <p>Bilerek eklenmeyenler: kullanici sistemi, coklu drone profili, karmasik dashboard.</p>
-    </section>
+    <section class="slide"><div class="label">Slayt 17</div><h2>Drone Checklist Urun Akisi</h2><img class="visual" src="assets/10-flight-session-flow.png" alt="Flight session flow"><ol><li>Kullanici yeni ucus baslatir</li><li>Sistem checklist sablonunu oturuma kopyalar</li><li>Kullanici faz bazli maddeleri tamamlar</li><li>Acil durum prosedurlerini referans panelinden okur</li><li>Ucus kapatilir ve history saklanir</li></ol></section>
 
-    <section class="slide">
-      <div class="label">Slayt 18</div>
-      <h2>Faz 1 Dosya Ciktilari</h2>
-      <ul>
-        <li><code>drone_checklist_app.py</code></li>
-        <li><code>PHASE1_DRONE_CHECKLIST_PLAN.md</code></li>
-        <li>guncel <code>README.md</code></li>
-        <li>guncel sunum dosyalari</li>
-      </ul>
-    </section>
+    <section class="slide"><div class="label">Slayt 18</div><h2>Checklist Fazlari</h2><img class="visual" src="assets/11-checklist-phases.png" alt="Checklist phases"><p class="lead">Acil durum prosedurleri normal checkbox listesi degil, referans panelidir.</p></section>
 
-    <section class="slide">
-      <div class="label">Slayt 19</div>
-      <h2>Faz 1 Kabul Kriterleri</h2>
-      <ol>
-        <li>CrewAI yeni dosya adina yazar</li>
-        <li>Uygulama lokal olarak acilir</li>
-        <li>UI Turkcedir</li>
-        <li>Her ucus icin yeni checklist olusur</li>
-        <li>Gecmis ucuslar saklanir</li>
-        <li>Ortam Kontrolu ayri bolumdur</li>
-        <li>Acil Durum Prosedurleri referans panelidir</li>
-      </ol>
-    </section>
+    <section class="slide"><div class="label">Slayt 19</div><h2>Veri Modeli</h2><img class="visual" src="assets/12-data-model-erd.png" alt="Data model ERD"><table><tr><th>Tablo</th><th>Gorev</th></tr><tr><td><code>checklist_templates</code></td><td>Standart checklist maddelerini saklar</td></tr><tr><td><code>flight_sessions</code></td><td>Her ucus icin oturum kaydi tutar</td></tr><tr><td><code>session_items</code></td><td>O ucusa ait tamamlanma durumunu saklar</td></tr></table></section>
 
-    <section class="slide">
-      <div class="label">Slayt 20</div>
-      <h2>Kapanis</h2>
-      <p class="lead">Bu fazda amac Multi-Agent'i kurmak degil, dogru urun modelini single-agent ile netlestirmektir.</p>
-      <p class="lead">Sonraki mantikli adim, ayni urunu uzmanlasmis agent'lara bolmektir.</p>
-    </section>
+    <section class="slide"><div class="label">Slayt 20</div><h2>Session Mantigi</h2><ul><li>her ucus ayri takip edilir</li><li>tamamlanma durumu ucusa ozel olur</li><li>gecmis ucuslar korunur</li><li>zorunlu maddeler tamamlanmadan ucus kapatilamaz</li></ul><p class="emphasis">Checklist her ucus icin temiz baslamalidir.</p></section>
 
-    <section class="slide">
-      <div class="label">Slayt 21</div>
-      <h2>Referanslar</h2>
-      <ul>
-        <li>Wooldridge, M. <em>An Introduction to MultiAgent Systems</em></li>
-        <li>FIPA standartlari: <code>http://www.fipa.org/</code></li>
-        <li>CrewAI dokumantasyonu: <code>https://docs.crewai.com/</code></li>
-        <li>Repository temeli: <code>https://github.com/Shubuo/crewai-todo-app</code></li>
-      </ul>
-    </section>
+    <section class="slide"><div class="label">Slayt 21</div><h2>API Akisi</h2><img class="visual" src="assets/13-api-flow.png" alt="API flow"><ul><li><code>GET /api/active-session</code></li><li><code>POST /api/sessions</code></li><li><code>PUT /api/session-items/&lt;id&gt;</code></li><li><code>POST /api/sessions/&lt;id&gt;/close</code></li><li><code>GET /api/history</code></li></ul></section>
+
+    <section class="slide"><div class="label">Slayt 22</div><h2>Basit Turkce UI</h2><img class="visual" src="assets/14-ui-wireframe.png" alt="UI wireframe"><ul><li>aktif ucus karti</li><li>yeni ucus baslatma formu</li><li>faz bazli checklist bolumleri</li><li>acil durum referans paneli</li><li>gecmis ucuslar listesi</li></ul></section>
+
+    <section class="slide"><div class="label">Slayt 23</div><h2>Dogrulama</h2><ul><li>Python compile kontrolu</li><li>Flask API smoke test</li><li>yeni session olusturma</li><li>checklist maddesi guncelleme</li><li>zorunlu maddeler bitmeden ucus kapatma engeli</li><li>history endpoint kontrolu</li></ul><p>Not: <code>uv run</code> bu makinede <code>onnxruntime</code> platform uyumsuzlugu nedeniyle takildi.</p></section>
+
+    <section class="slide"><div class="label">Slayt 24</div><h2>Faz 1 Ciktilari</h2><ul><li><code>drone_checklist_app.py</code></li><li><code>drone_checklist.db</code></li><li><code>PHASE1_DRONE_CHECKLIST_PLAN.md</code></li><li><code>README.md</code></li><li><code>CREWAI sunum.md</code></li><li><code>CREWAI sunum.html</code></li><li><code>CREWAI sunum konusmaci notlari.md</code></li><li><code>assets/</code> altindaki PNG gorselleri</li></ul></section>
+
+    <section class="slide"><div class="label">Slayt 25</div><h2>Sonraki Adim</h2><img class="visual" src="assets/15-phase2-roadmap.png" alt="Phase 2 roadmap"><ul><li>Operasyon Planlayici</li><li>Guvenlik ve Is Akisi Tasarimcisi</li><li>Arayuz Tasarimcisi</li><li>Full-Stack Gelistirici</li><li>QA Gozden Gecirici</li></ul></section>
+
+    <section class="slide"><div class="label">Slayt 26</div><h2>Kapanis</h2><ul><li>MAS teorisi CrewAI kavramlariyla eslestirildi</li><li>FIPA standartlari pratik agent/task yapisina baglandi</li><li>single-agent Faz 1 uygulamasi olusturuldu</li><li>drone checklist icin session bazli veri modeli kuruldu</li><li>sonraki multi-agent faz icin referans cikti hazirlandi</li></ul></section>
+
+    <section class="slide"><div class="label">Slayt 27</div><h2>Referanslar</h2><ul><li>Wooldridge, M. <em>An Introduction to MultiAgent Systems</em></li><li>FIPA standartlari: <code>http://www.fipa.org/</code></li><li>CrewAI dokumantasyonu: <code>https://docs.crewai.com/</code></li><li>Proje repository'si: yerel CrewAI uygulama repository'si</li></ul></section>
   </div>
 </body>
 </html>
