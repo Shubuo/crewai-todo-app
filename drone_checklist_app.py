@@ -1,984 +1,1162 @@
-import os
 import sqlite3
-from pathlib import Path
+import os
+from datetime import datetime
+from flask import Flask, render_template_string, request, jsonify, g
 
-from flask import Flask, g, jsonify, render_template_string, request
-
-BASE_DIR = Path(__file__).resolve().parent
-DATABASE = BASE_DIR / "drone_checklist.db"
+# Configuration
+DATABASE = 'drone_checklist.db'
 app = Flask(__name__)
+app.config['DATABASE'] = DATABASE
 
-CATEGORY_LABELS = {
-    "ortam_kontrolu": "Ortam Kontrolu",
-    "ucus_oncesi": "Ucus Oncesi",
-    "ucus_sirasinda": "Ucus Sirasinda",
-    "acil_durum_prosedurleri": "Acil Durum Prosedurleri",
-    "ucus_sonrasi": "Ucus Sonrasi",
-}
-
-CHECKLIST_CATEGORIES = [
-    "ortam_kontrolu",
-    "ucus_oncesi",
-    "ucus_sirasinda",
-    "ucus_sonrasi",
-]
-
-SEED_TEMPLATES = [
-    ("ortam_kontrolu", "Hava durumu uygun", 1, 1, 0),
-    ("ortam_kontrolu", "Ruzgar sinirlar icinde", 2, 1, 0),
-    ("ortam_kontrolu", "Yagis yok", 3, 1, 0),
-    ("ortam_kontrolu", "Gorus yeterli", 4, 1, 0),
-    ("ortam_kontrolu", "GPS kosullari uygun", 5, 1, 0),
-    ("ortam_kontrolu", "Ucus alani yasal olarak uygun", 6, 1, 0),
-    ("ortam_kontrolu", "Cevresel engeller kontrol edildi", 7, 1, 0),
-    ("ortam_kontrolu", "Insan ve arac yogunlugu degerlendirildi", 8, 1, 0),
-    ("ucus_oncesi", "Batarya seviyesi yeterli", 1, 1, 0),
-    ("ucus_oncesi", "Kumanda baglantisi tamam", 2, 1, 0),
-    ("ucus_oncesi", "Pervaneler saglam", 3, 1, 0),
-    ("ucus_oncesi", "Govde ve motorlar kontrol edildi", 4, 1, 0),
-    ("ucus_oncesi", "SD kart takili", 5, 0, 0),
-    ("ucus_oncesi", "Kamera kontrol edildi", 6, 0, 0),
-    ("ucus_oncesi", "IMU ve pusula durumu uygun", 7, 1, 0),
-    ("ucus_oncesi", "Kalkis alani guvenli", 8, 1, 0),
-    ("ucus_oncesi", "Acil durum prosedurleri gozden gecirildi", 9, 1, 0),
-    ("ucus_sirasinda", "Batarya seviyesi izleniyor", 1, 1, 0),
-    ("ucus_sirasinda", "Sinyal gucu izleniyor", 2, 1, 0),
-    ("ucus_sirasinda", "Gorus hatti korunuyor", 3, 1, 0),
-    ("ucus_sirasinda", "Irtifa ve mesafe sinirlari izleniyor", 4, 1, 0),
-    ("ucus_sirasinda", "Cevresel riskler takip ediliyor", 5, 1, 0),
-    ("ucus_sonrasi", "Motorlar kapatildi", 1, 1, 0),
-    ("ucus_sonrasi", "Batarya cikarildi", 2, 1, 0),
-    ("ucus_sonrasi", "Govde hasar kontrolu yapildi", 3, 1, 0),
-    ("ucus_sonrasi", "Ucus notu alindi", 4, 0, 0),
-    ("ucus_sonrasi", "Medya yedeklendi", 5, 0, 0),
-    ("ucus_sonrasi", "Ekipman toplandi", 6, 1, 0),
-    ("acil_durum_prosedurleri", "Sinyal kaybinda eve donus prosedurunu uygula", 1, 0, 1),
-    ("acil_durum_prosedurleri", "Dusuk bataryada guvenli donus veya inis karari ver", 2, 0, 1),
-    ("acil_durum_prosedurleri", "Kontrol kaybinda guvenli inis alani sec", 3, 0, 1),
-    ("acil_durum_prosedurleri", "Ani hava degisiminde gorevi iptal et ve geri don", 4, 0, 1),
-    ("acil_durum_prosedurleri", "Motor veya pervane anomalisinde ucusu sonlandir", 5, 0, 1),
-]
-
-ORDER_BY_CATEGORY_SQL = """
-CASE category
-    WHEN 'ortam_kontrolu' THEN 1
-    WHEN 'ucus_oncesi' THEN 2
-    WHEN 'ucus_sirasinda' THEN 3
-    WHEN 'acil_durum_prosedurleri' THEN 4
-    WHEN 'ucus_sonrasi' THEN 5
-    ELSE 99
-END
-"""
-
-
+# Database helpers
 def get_db():
-    """Return the SQLite connection for the current request context."""
-    db = getattr(g, "_database", None)
+    """Get database connection for current request context."""
+    db = getattr(g, '_database', None)
     if db is None:
         db = g._database = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
     return db
 
-
 @app.teardown_appcontext
 def close_connection(exception):
-    """Close the database connection at the end of the request."""
-    db = getattr(g, "_database", None)
+    """Close database connection at end of request."""
+    db = getattr(g, '_database', None)
     if db is not None:
         db.close()
 
-
-def get_json_payload():
-    """Return a JSON object payload or None when the request body is invalid."""
-    data = request.get_json(silent=True)
-    return data if isinstance(data, dict) else None
-
-
 def init_db():
-    """Create tables and seed the default checklist templates."""
+    """Initialize database with tables and seed data."""
     with app.app_context():
         db = get_db()
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS checklist_templates (
+        cursor = db.cursor()
+        
+        # Create checklist template items table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS template_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category TEXT NOT NULL,
-                title TEXT NOT NULL,
-                sort_order INTEGER NOT NULL,
-                required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1)),
-                is_reference_only INTEGER NOT NULL DEFAULT 0 CHECK (is_reference_only IN (0, 1))
+                section TEXT NOT NULL,
+                item_text TEXT NOT NULL,
+                is_emergency BOOLEAN DEFAULT 0,
+                sort_order INTEGER DEFAULT 0
             )
-            """
-        )
-        db.execute(
-            """
+        ''')
+        
+        # Create flight sessions table
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS flight_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                flight_name TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active',
-                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                completed_at TIMESTAMP
+                start_time TEXT NOT NULL,
+                end_time TEXT,
+                status TEXT DEFAULT 'active',
+                notes TEXT
             )
-            """
-        )
-        db.execute(
-            """
+        ''')
+        
+        # Create session items table
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS session_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id INTEGER NOT NULL,
-                template_id INTEGER NOT NULL,
-                category TEXT NOT NULL,
-                title TEXT NOT NULL,
-                sort_order INTEGER NOT NULL,
-                required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1)),
-                completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
-                completed_at TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES flight_sessions (id),
-                FOREIGN KEY (template_id) REFERENCES checklist_templates (id)
+                template_item_id INTEGER NOT NULL,
+                completed INTEGER DEFAULT 0,
+                completed_at TEXT,
+                FOREIGN KEY (session_id) REFERENCES flight_sessions(id),
+                FOREIGN KEY (template_item_id) REFERENCES template_items(id),
+                UNIQUE(session_id, template_item_id)
             )
-            """
-        )
-
-        template_count = db.execute("SELECT COUNT(*) AS count FROM checklist_templates").fetchone()["count"]
-        if template_count == 0:
-            db.executemany(
-                """
-                INSERT INTO checklist_templates (category, title, sort_order, required, is_reference_only)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                SEED_TEMPLATES,
-            )
-
+        ''')
+        
         db.commit()
+        
+        # Seed default items if table is empty
+        cursor.execute('SELECT COUNT(*) FROM template_items')
+        if cursor.fetchone()[0] == 0:
+            seed_default_items(db)
 
+def seed_default_items(db):
+    """Populate database with default Turkish drone checklist items."""
+    cursor = db.cursor()
+    
+    default_items = [
+        # Ortam Kontrolu
+        ('ortam_kontrolu', 'Hava durumu uygun mu? (ruzgar, yagmur, görüs mesafesi)', 0, 1),
+        ('ortam_kontrolu', 'Ucus alani izinli mi?', 0, 2),
+        ('ortam_kontrolu', 'Guvenli inis/kalkis alani mevcut mu?', 0, 3),
+        ('ortam_kontrolu', 'Elektromanyetik girisim riski var mi?', 0, 4),
+        ('ortam_kontrolu', 'Ucus alaninda insan veya hayvan var mi?', 0, 5),
+        ('ortam_kontrolu', 'GPS engeli veya parazit kaynagi var mi?', 0, 6),
+        
+        # Ucus Oncesi
+        ('ucus_oncesi', 'Pil sarj seviyesi kontrol edildi mi? (en az %80)', 0, 1),
+        ('ucus_oncesi', 'Pil sicakligi normal aralikta mi?', 0, 2),
+        ('ucus_oncesi', 'Pervane ve motorlar saglam mi? (catlak, hasar kontrolu)', 0, 3),
+        ('ucus_oncesi', 'Pervaneler dogru sekilde takili mi?', 0, 4),
+        ('ucus_oncesi', 'GPS sinyali yeterli mi? (en az 8 uydu)', 0, 5),
+        ('ucus_oncesi', 'Kumanda pili kontrol edildi mi?', 0, 6),
+        ('ucus_oncesi', 'Kalkis noktasinda engel var mi?', 0, 7),
+        ('ucus_oncesi', 'Uzaktan kumanda baglantisi test edildi mi?', 0, 8),
+        ('ucus_oncesi', 'Kamera ve gimbal fonksiyonel mi?', 0, 9),
+        ('ucus_oncesi', 'Hafiza karti takili ve bos alan var mi?', 0, 10),
+        ('ucus_oncesi', 'Firmware guncellemesi gerekli mi?', 0, 11),
+        ('ucus_oncesi', 'Ev noktasi (Home Point) ayari yapildi mi?', 0, 12),
+        
+        # Ucus Sirasinda
+        ('ucus_sirasinda', 'Kalkis normal mi? (titreme, gurultu kontrolu)', 0, 1),
+        ('ucus_sirasinda', 'Ses ve titreşim normal mi?', 0, 2),
+        ('ucus_sirasinda', 'ucus yuksekligi ve mesafe guvenli mi?', 0, 3),
+        ('ucus_sirasinda', 'Pil seviyesi yeterli mi? (en az %30 kalacak)', 0, 4),
+        ('ucus_sirasinda', 'GPS ve navigasyon dogru calisiyor mu?', 0, 5),
+        ('ucus_sirasinda', 'Hava kosullarinda degisiklik oldu mu?', 0, 6),
+        ('ucus_sirasinda', 'Manevra ve kontroller duzgun calisiyor mu?', 0, 7),
+        ('ucus_sirasinda', 'Kamera göruntuü kalitesi нормал mu?', 0, 8),
+        ('ucus_sirasinda', 'Ruzgar direnci yeterli mi?', 0, 9),
+        ('ucus_sirasinda', 'Sinyal gücü stabil mi?', 0, 10),
+        
+        # Acil Durum Prosedurleri (reference only)
+        ('acil_durum', 'Acil inis proseduru: Yavasca alcagmaya baslayin', 1, 1),
+        ('acil_durum', 'Sinyal kaybi durumunda: Otomatik geri dönüsü bekleyin', 1, 2),
+        ('acil_durum', 'Pil uyarisi: Derhal inise gecin', 1, 3),
+        ('acil_durum', 'Kritik ariza: Motorlari kapatin ve düsüsü izleyin', 1, 4),
+        ('acil_durum', 'Yasadisi bolge girisi: Derhal cikis yapin', 1, 5),
+        ('acil_durum', 'Uzaktan kumanda pil uyarisi: Acil iniş baslayin', 1, 6),
+        ('acil_durum', 'GPS kaybi: Manuel modda yavasca inis yapin', 1, 7),
+        ('acil_durum', 'Firmware arizasi: Motorlari durdurun', 1, 8),
+        ('acil_durum', 'Kaza durumu: Motorlari hemen kapatin', 1, 9),
+        ('acil_durum', 'Uzaktan kumanda baglanti kopmasi: 3 dakika bekleyin', 1, 10),
+        
+        # Ucus Sonrasi
+        ('ucus_sonrasi', 'Drone hasar kontrol edildi mi?', 0, 1),
+        ('ucus_sonrasi', 'Pil sicakligi normal mi?', 0, 2),
+        ('ucus_sonrasi', 'Veriler güvenli bir sekilde kaydedildi mi?', 0, 3),
+        ('ucus_sonrasi', 'Ekipman temizligi yapildi mi?', 0, 4),
+        ('ucus_sonrasi', 'Ucus günlügü dolduruldu mu?', 0, 5),
+        ('ucus_sonrasi', 'Piller saglam mi ve dogru saklandi mi?', 0, 6),
+        ('ucus_sonrasi', 'Hafiza karti yedeklendi mi?', 0, 7),
+        ('ucus_sonrasi', 'Ekipman eksik veya hasarli var mi?', 0, 8),
+    ]
+    
+    for item in default_items:
+        cursor.execute('''
+            INSERT INTO template_items (section, item_text, is_emergency, sort_order)
+            VALUES (?, ?, ?, ?)
+        ''', item)
+    
+    db.commit()
 
-def row_to_session(row):
-    return {
-        "id": row["id"],
-        "flight_name": row["flight_name"],
-        "status": row["status"],
-        "started_at": row["started_at"],
-        "completed_at": row["completed_at"],
-    }
-
-
-def row_to_session_item(row):
-    return {
-        "id": row["id"],
-        "category": row["category"],
-        "category_label": CATEGORY_LABELS.get(row["category"], row["category"]),
-        "title": row["title"],
-        "sort_order": row["sort_order"],
-        "required": bool(row["required"]),
-        "completed": bool(row["completed"]),
-        "completed_at": row["completed_at"],
-    }
-
-
-def row_to_reference_item(row):
-    return {
-        "id": row["id"],
-        "category": row["category"],
-        "category_label": CATEGORY_LABELS.get(row["category"], row["category"]),
-        "title": row["title"],
-        "sort_order": row["sort_order"],
-    }
-
-
-def fetch_active_session_row():
+# API Routes
+@app.route('/api/session/start', methods=['POST'])
+def start_session():
+    """Start a new flight session."""
     db = get_db()
-    return db.execute(
-        "SELECT * FROM flight_sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1"
-    ).fetchone()
-
-
-def fetch_session_row(session_id):
-    db = get_db()
-    return db.execute("SELECT * FROM flight_sessions WHERE id = ?", (session_id,)).fetchone()
-
-
-def fetch_session_item_row(item_id):
-    db = get_db()
-    return db.execute("SELECT * FROM session_items WHERE id = ?", (item_id,)).fetchone()
-
-
-def fetch_reference_items():
-    db = get_db()
-    rows = db.execute(
-        f"""
-        SELECT * FROM checklist_templates
-        WHERE is_reference_only = 1
-        ORDER BY {ORDER_BY_CATEGORY_SQL}, sort_order, id
-        """
-    ).fetchall()
-    return [row_to_reference_item(row) for row in rows]
-
-
-def fetch_session_items(session_id):
-    db = get_db()
-    rows = db.execute(
-        f"""
-        SELECT * FROM session_items
-        WHERE session_id = ?
-        ORDER BY {ORDER_BY_CATEGORY_SQL}, sort_order, id
-        """,
-        (session_id,),
-    ).fetchall()
-    return [row_to_session_item(row) for row in rows]
-
-
-def group_items_by_category(items):
-    grouped = []
-    items_by_category = {category: [] for category in CHECKLIST_CATEGORIES}
-
-    for item in items:
-        items_by_category.setdefault(item["category"], []).append(item)
-
-    for category in CHECKLIST_CATEGORIES:
-        category_items = items_by_category.get(category, [])
-        required_total = sum(1 for item in category_items if item["required"])
-        required_completed = sum(1 for item in category_items if item["required"] and item["completed"])
-        grouped.append(
-            {
-                "key": category,
-                "label": CATEGORY_LABELS[category],
-                "items": category_items,
-                "total_count": len(category_items),
-                "completed_count": sum(1 for item in category_items if item["completed"]),
-                "required_total": required_total,
-                "required_completed": required_completed,
-            }
-        )
-
-    return grouped
-
-
-def build_session_payload(session_row):
-    if session_row is None:
-        return {
-            "session": None,
-            "sections": [],
-            "reference_items": fetch_reference_items(),
-            "can_close": False,
-            "summary": None,
-        }
-
-    items = fetch_session_items(session_row["id"])
-    sections = group_items_by_category(items)
-    total_count = sum(section["total_count"] for section in sections)
-    completed_count = sum(section["completed_count"] for section in sections)
-    required_total = sum(section["required_total"] for section in sections)
-    required_completed = sum(section["required_completed"] for section in sections)
-
-    return {
-        "session": row_to_session(session_row),
-        "sections": sections,
-        "reference_items": fetch_reference_items(),
-        "can_close": required_total == required_completed,
-        "summary": {
-            "total_count": total_count,
-            "completed_count": completed_count,
-            "pending_count": total_count - completed_count,
-            "required_total": required_total,
-            "required_completed": required_completed,
-        },
-    }
-
-
-def build_history_payload():
-    db = get_db()
-    sessions = db.execute(
-        "SELECT * FROM flight_sessions ORDER BY started_at DESC, id DESC"
-    ).fetchall()
-    payload = []
-
-    for session in sessions:
-        counts = db.execute(
-            """
-            SELECT
-                COUNT(*) AS total_count,
-                SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) AS completed_count,
-                SUM(CASE WHEN required = 1 THEN 1 ELSE 0 END) AS required_total,
-                SUM(CASE WHEN required = 1 AND completed = 1 THEN 1 ELSE 0 END) AS required_completed
-            FROM session_items
-            WHERE session_id = ?
-            """,
-            (session["id"],),
-        ).fetchone()
-        payload.append(
-            {
-                **row_to_session(session),
-                "total_count": counts["total_count"] or 0,
-                "completed_count": counts["completed_count"] or 0,
-                "required_total": counts["required_total"] or 0,
-                "required_completed": counts["required_completed"] or 0,
-            }
-        )
-
-    return payload
-
-
-def create_session_items(session_id):
-    db = get_db()
-    templates = db.execute(
-        f"""
-        SELECT * FROM checklist_templates
-        WHERE is_reference_only = 0
-        ORDER BY {ORDER_BY_CATEGORY_SQL}, sort_order, id
-        """
-    ).fetchall()
-    db.executemany(
-        """
-        INSERT INTO session_items (session_id, template_id, category, title, sort_order, required)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                session_id,
-                template["id"],
-                template["category"],
-                template["title"],
-                template["sort_order"],
-                template["required"],
-            )
-            for template in templates
-        ],
-    )
-
-
-@app.route("/")
-def index():
-    """Render the main single-page drone checklist UI."""
-    return render_template_string(TEMPLATE)
-
-
-@app.route("/api/active-session", methods=["GET"])
-def get_active_session():
-    """Return the current active flight session and its checklist state."""
-    active_session = fetch_active_session_row()
-    return jsonify(build_session_payload(active_session))
-
-
-@app.route("/api/sessions", methods=["POST"])
-def create_session():
-    """Create a new flight session from the shared checklist template."""
-    data = get_json_payload()
-    if data is None:
-        return jsonify({"error": "Gecerli bir JSON nesnesi gonderilmelidir."}), 400
-
-    active_session = fetch_active_session_row()
-    if active_session is not None:
-        return jsonify({"error": "Halihazirda aktif bir ucus bulunuyor."}), 400
-
-    flight_name = str(data.get("flight_name", "")).strip()
-    if not flight_name:
-        return jsonify({"error": "Ucus adi zorunludur."}), 400
-
-    db = get_db()
-    cursor = db.execute(
-        "INSERT INTO flight_sessions (flight_name, status) VALUES (?, 'active')",
-        (flight_name,),
-    )
+    cursor = db.cursor()
+    
+    start_time = datetime.now().isoformat()
+    cursor.execute('''
+        INSERT INTO flight_sessions (start_time, status)
+        VALUES (?, 'active')
+    ''', (start_time,))
+    
     session_id = cursor.lastrowid
-    create_session_items(session_id)
     db.commit()
+    
+    return jsonify({
+        'success': True,
+        'session': {
+            'id': session_id,
+            'start_time': start_time,
+            'status': 'active'
+        }
+    })
 
-    return jsonify(build_session_payload(fetch_session_row(session_id))), 201
-
-
-@app.route("/api/sessions/<int:session_id>/items", methods=["GET"])
-def get_session_items(session_id):
-    """Return grouped checklist items for a flight session."""
-    session_row = fetch_session_row(session_id)
-    if session_row is None:
-        return jsonify({"error": "Ucus oturumu bulunamadi."}), 404
-
-    return jsonify(build_session_payload(session_row))
-
-
-@app.route("/api/session-items/<int:item_id>", methods=["PUT"])
-def update_session_item(item_id):
-    """Update the completion status of a checklist item."""
-    data = get_json_payload()
-    if data is None:
-        return jsonify({"error": "Gecerli bir JSON nesnesi gonderilmelidir."}), 400
-
-    completed = data.get("completed")
-    if not isinstance(completed, bool):
-        return jsonify({"error": "completed alani true veya false olmalidir."}), 400
-
-    item_row = fetch_session_item_row(item_id)
-    if item_row is None:
-        return jsonify({"error": "Checklist maddesi bulunamadi."}), 404
-
-    session_row = fetch_session_row(item_row["session_id"])
-    if session_row is None:
-        return jsonify({"error": "Bagli ucus oturumu bulunamadi."}), 404
-    if session_row["status"] != "active":
-        return jsonify({"error": "Tamamlanmis bir ucus oturumu degistirilemez."}), 400
-
+@app.route('/api/session/active', methods=['GET'])
+def get_active_session():
+    """Get the current active flight session."""
     db = get_db()
-    db.execute(
-        """
-        UPDATE session_items
-        SET completed = ?, completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END
+    cursor = db.cursor()
+    
+    cursor.execute('''
+        SELECT id, start_time, end_time, status, notes
+        FROM flight_sessions
+        WHERE status = 'active'
+        ORDER BY id DESC
+        LIMIT 1
+    ''')
+    
+    session = cursor.fetchone()
+    if not session:
+        return jsonify({'session': None, 'items': []})
+    
+    cursor.execute('''
+        SELECT ti.id, ti.item_text, ti.section, ti.is_emergency, ti.sort_order,
+               COALESCE(si.completed, 0) as completed, si.completed_at
+        FROM template_items ti
+        LEFT JOIN session_items si ON ti.id = si.template_item_id AND si.session_id = ?
+        ORDER BY ti.section, ti.sort_order
+    ''', (session['id'],))
+    
+    items = cursor.fetchall()
+    
+    return jsonify({
+        'session': dict(session),
+        'items': [dict(item) for item in items]
+    })
+
+@app.route('/api/session/items', methods=['GET'])
+def get_session_items():
+    """Get checklist items for a session."""
+    session_id = request.args.get('session_id', type=int)
+    
+    if not session_id:
+        return jsonify({'error': 'session_id required'}), 400
+    
+    db = get_db()
+    cursor = db.cursor()
+    
+    cursor.execute('''
+        SELECT ti.id, ti.item_text, ti.section, ti.is_emergency, ti.sort_order,
+               COALESCE(si.completed, 0) as completed, si.completed_at
+        FROM template_items ti
+        LEFT JOIN session_items si ON ti.id = si.template_item_id AND si.session_id = ?
+        ORDER BY ti.section, ti.sort_order
+    ''', (session_id,))
+    
+    items = cursor.fetchall()
+    return jsonify([dict(item) for item in items])
+
+@app.route('/api/session/update', methods=['POST'])
+def update_session_item():
+    """Update a checklist item completion status."""
+    data = request.get_json()
+    
+    if not all(k in data for k in ['session_id', 'template_item_id', 'completed']):
+        return jsonify({'error': 'Missing required fields: session_id, template_item_id, completed'}), 400
+    
+    db = get_db()
+    cursor = db.cursor()
+    
+    if data['completed']:
+        completed_at = datetime.now().isoformat()
+        cursor.execute('''
+            INSERT OR REPLACE INTO session_items (session_id, template_item_id, completed, completed_at)
+            VALUES (?, ?, 1, ?)
+        ''', (data['session_id'], data['template_item_id'], completed_at))
+    else:
+        cursor.execute('''
+            DELETE FROM session_items 
+            WHERE session_id = ? AND template_item_id = ?
+        ''', (data['session_id'], data['template_item_id']))
+    
+    db.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/session/close', methods=['POST'])
+def close_session():
+    """Close an active flight session."""
+    data = request.get_json()
+    session_id = data.get('session_id')
+    notes = data.get('notes', '')
+    
+    if not session_id:
+        return jsonify({'error': 'session_id required'}), 400
+    
+    db = get_db()
+    cursor = db.cursor()
+    
+    cursor.execute('''
+        UPDATE flight_sessions 
+        SET status = 'completed', end_time = ?, notes = ?
+        WHERE id = ? AND status = 'active'
+    ''', (datetime.now().isoformat(), notes, session_id))
+    
+    db.commit()
+    
+    if cursor.rowcount == 0:
+        return jsonify({'error': 'Session not found or already closed'}), 404
+    
+    return jsonify({'success': True})
+
+@app.route('/api/session/history', methods=['GET'])
+def get_session_history():
+    """Get list of past flight sessions."""
+    db = get_db()
+    cursor = db.cursor()
+    
+    cursor.execute('''
+        SELECT id, start_time, end_time, status, notes
+        FROM flight_sessions
+        ORDER BY start_time DESC
+        LIMIT 100
+    ''')
+    
+    sessions = cursor.fetchall()
+    return jsonify([dict(row) for row in sessions])
+
+@app.route('/api/session/<int:session_id>', methods=['GET'])
+def get_session_detail(session_id):
+    """Get details of a specific session."""
+    db = get_db()
+    cursor = db.cursor()
+    
+    cursor.execute('''
+        SELECT id, start_time, end_time, status, notes
+        FROM flight_sessions
         WHERE id = ?
-        """,
-        (1 if completed else 0, 1 if completed else 0, item_id),
-    )
-    db.commit()
+    ''', (session_id,))
+    
+    session = cursor.fetchone()
+    if not session:
+        return jsonify({'error': 'Session not found'}), 404
+    
+    cursor.execute('''
+        SELECT ti.id, ti.item_text, ti.section, ti.is_emergency, ti.sort_order,
+               COALESCE(si.completed, 0) as completed, si.completed_at
+        FROM template_items ti
+        LEFT JOIN session_items si ON ti.id = si.template_item_id AND si.session_id = ?
+        ORDER BY ti.section, ti.sort_order
+    ''', (session_id,))
+    
+    items = cursor.fetchall()
+    
+    return jsonify({
+        'session': dict(session),
+        'items': [dict(item) for item in items]
+    })
 
-    return jsonify(build_session_payload(fetch_session_row(session_row["id"])))
-
-
-@app.route("/api/sessions/<int:session_id>/close", methods=["POST"])
-def close_session(session_id):
-    """Close a flight session once all required items are completed."""
-    session_row = fetch_session_row(session_id)
-    if session_row is None:
-        return jsonify({"error": "Ucus oturumu bulunamadi."}), 404
-    if session_row["status"] != "active":
-        return jsonify({"error": "Bu ucus oturumu zaten kapatildi."}), 400
-
-    payload = build_session_payload(session_row)
-    if not payload["can_close"]:
-        summary = payload["summary"]
-        return jsonify(
-            {
-                "error": "Zorunlu maddeler tamamlanmadan ucus kapatilamaz.",
-                "required_total": summary["required_total"],
-                "required_completed": summary["required_completed"],
-            }
-        ), 400
-
+@app.route('/api/emergency/reference', methods=['GET'])
+def get_emergency_reference():
+    """Get emergency procedures as reference panel items."""
     db = get_db()
-    db.execute(
-        "UPDATE flight_sessions SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (session_id,),
-    )
-    db.commit()
+    cursor = db.cursor()
+    
+    cursor.execute('''
+        SELECT id, item_text, sort_order
+        FROM template_items
+        WHERE is_emergency = 1
+        ORDER BY sort_order
+    ''')
+    
+    items = cursor.fetchall()
+    return jsonify([dict(row) for row in items])
 
-    return jsonify({"message": "Ucus oturumu kapatildi."})
-
-
-@app.route("/api/history", methods=["GET"])
-def get_history():
-    """Return previously created flight sessions."""
-    return jsonify(build_history_payload())
-
-
-@app.route("/api/reference-items", methods=["GET"])
-def get_reference_items():
-    """Return emergency reference items."""
-    return jsonify(fetch_reference_items())
-
-
-TEMPLATE = """
+# HTML Template - Single Page Turkish UI
+HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drone Flight Checklist App</title>
+    <title>Drone Ucus Kontrol Listesi</title>
     <style>
         * {
+            margin: 0;
+            padding: 0;
             box-sizing: border-box;
         }
+        
         body {
-            margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            background: #f3f4f6;
-            color: #111827;
-        }
-        .page {
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 24px 16px 48px;
-        }
-        .hero {
-            background: #ffffff;
-            border: 1px solid #d1d5db;
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 16px;
-        }
-        h1, h2, h3 {
-            margin: 0;
-        }
-        h1 {
-            font-size: 30px;
-            margin-bottom: 8px;
-        }
-        p {
-            margin: 0;
-            color: #4b5563;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 16px;
-        }
-        .card {
-            background: #ffffff;
-            border: 1px solid #d1d5db;
-            border-radius: 16px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
             padding: 20px;
+            color: #fff;
         }
-        .card + .card {
-            margin-top: 16px;
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
         }
-        .muted {
-            color: #6b7280;
-            font-size: 14px;
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
         }
-        .summary {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-top: 16px;
+        
+        h1 {
+            font-size: 2em;
+            color: #4ade80;
+            margin-bottom: 10px;
         }
-        .summary-box {
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
+        
+        .subtitle {
+            color: #94a3b8;
+        }
+        
+        .session-info {
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 12px;
-            padding: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
         }
-        .summary-box strong {
-            display: block;
-            font-size: 22px;
-            margin-top: 4px;
+        
+        .session-timer {
+            font-size: 1.5em;
+            color: #4ade80;
+            font-weight: bold;
+            margin: 10px 0;
         }
-        form {
+        
+        .btn-group {
             display: flex;
-            gap: 12px;
-            margin-top: 16px;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
             flex-wrap: wrap;
         }
-        input[type="text"] {
-            flex: 1;
-            min-width: 220px;
-            padding: 12px 14px;
-            border: 1px solid #cbd5e1;
-            border-radius: 10px;
-            font-size: 15px;
-        }
+        
         button {
+            padding: 12px 24px;
             border: none;
-            border-radius: 10px;
-            background: #1d4ed8;
-            color: #ffffff;
-            padding: 12px 16px;
-            font-size: 15px;
+            border-radius: 8px;
             cursor: pointer;
-        }
-        button.secondary {
-            background: #111827;
-        }
-        button:disabled {
-            background: #94a3b8;
-            cursor: not-allowed;
-        }
-        .status {
-            display: inline-block;
-            margin-top: 12px;
-            padding: 8px 10px;
-            border-radius: 999px;
-            background: #dbeafe;
-            color: #1d4ed8;
             font-size: 14px;
-            font-weight: 700;
+            font-weight: 600;
+            transition: all 0.3s;
         }
-        .section-list {
+        
+        .btn-primary {
+            background: #4ade80;
+            color: #1a1a2e;
+        }
+        
+        .btn-primary:hover {
+            background: #22c55e;
+            transform: translateY(-2px);
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .btn-secondary {
+            background: #64748b;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #475569;
+        }
+        
+        .main-grid {
             display: grid;
-            gap: 16px;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
         }
+        
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .checklist-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
         .section-header {
             display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-        .section-header span {
-            color: #6b7280;
-            font-size: 14px;
-        }
-        .items {
-            display: grid;
+            align-items: center;
             gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
         }
-        .item {
+        
+        .section-title {
+            font-size: 1.2em;
+            color: #60a5fa;
+        }
+        
+        .section-icon {
+            font-size: 1.5em;
+        }
+        
+        .checklist-item {
             display: flex;
-            gap: 10px;
-            align-items: flex-start;
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
+            align-items: center;
             padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        .item.completed {
-            opacity: 0.72;
+        
+        .checklist-item:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
-        .item input {
-            margin-top: 4px;
-            width: 18px;
-            height: 18px;
+        
+        .checklist-item.completed {
+            background: rgba(74, 222, 128, 0.1);
+            border-left: 4px solid #4ade80;
         }
-        .item-title {
-            font-size: 15px;
-            color: #111827;
-        }
-        .item.completed .item-title {
+        
+        .checklist-item.completed .item-text {
             text-decoration: line-through;
+            opacity: 0.7;
         }
-        .required-tag {
-            display: inline-block;
-            margin-top: 6px;
-            font-size: 12px;
-            color: #92400e;
-            background: #fef3c7;
-            border-radius: 999px;
-            padding: 4px 8px;
+        
+        .checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #64748b;
+            border-radius: 6px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
         }
-        .reference-box {
-            background: #fff7ed;
-            border: 1px solid #fdba74;
-            border-radius: 12px;
-            padding: 12px;
+        
+        .checklist-item.completed .checkbox {
+            background: #4ade80;
+            border-color: #4ade80;
         }
-        .reference-box + .reference-box {
-            margin-top: 12px;
-        }
-        .reference-box ul,
-        .history-list {
-            margin: 10px 0 0;
-            padding-left: 18px;
-        }
-        .history-list li {
-            margin: 8px 0;
-            color: #374151;
-        }
-        .empty {
-            padding: 18px;
-            border-radius: 12px;
-            background: #f9fafb;
-            border: 1px dashed #cbd5e1;
-            color: #6b7280;
-        }
-        .error,
-        .success {
+        
+        .checkmark {
             display: none;
-            margin-bottom: 16px;
-            padding: 12px 14px;
+            color: #1a1a2e;
+            font-weight: bold;
+        }
+        
+        .checklist-item.completed .checkmark {
+            display: block;
+        }
+        
+        .item-text {
+            flex: 1;
+        }
+        
+        .reference-panel {
+            background: linear-gradient(135deg, #7c2d12 0%, #9a3412 100%);
             border-radius: 12px;
+            padding: 20px;
+            position: sticky;
+            top: 20px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        
+        .reference-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .reference-title {
+            font-size: 1.1em;
+            color: #fed7aa;
+        }
+        
+        .reference-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            border-left: 3px solid #f97316;
             font-size: 14px;
+            line-height: 1.4;
         }
-        .error.show {
-            display: block;
-            background: #fee2e2;
-            color: #b91c1c;
-            border: 1px solid #fecaca;
+        
+        .reference-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: #f97316;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-size: 12px;
+            margin-right: 10px;
+            flex-shrink: 0;
         }
-        .success.show {
-            display: block;
-            background: #dcfce7;
-            color: #166534;
-            border: 1px solid #bbf7d0;
+        
+        .history-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
         }
-        @media (max-width: 820px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-            .summary {
-                grid-template-columns: 1fr;
-            }
+        
+        .history-title {
+            font-size: 1.1em;
+            color: #94a3b8;
+            margin-bottom: 15px;
+        }
+        
+        .history-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .history-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .history-date {
+            color: #60a5fa;
+        }
+        
+        .history-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        
+        .status-completed {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+        }
+        
+        .status-active {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+        }
+        
+        .no-session {
+            text-align: center;
+            padding: 60px 20px;
+            color: #94a3b8;
+        }
+        
+        .no-session-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+        
+        .progress-container {
+            margin-bottom: 15px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            text-align: right;
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 5px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+        }
+        
+        .overall-progress {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .overall-progress-title {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+        
+        .completion-rate {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4ade80;
         }
     </style>
 </head>
 <body>
-    <div class="page">
-        <div class="hero">
-            <h1>Drone Flight Checklist App</h1>
-            <p>Faz 1 tek agent urunu: basit, Turkce ve her ucus icin yeniden baslayan checklist akisi.</p>
+    <div class="container">
+        <header>
+            <h1>Drone Ucus Kontrol Listesi</h1>
+            <p class="subtitle">Güvenli ucuslar icin kontrol listenizi tamamlayin</p>
+        </header>
+        
+        <div class="session-info" id="sessionInfo">
+            <p>Henüz aktif bir ucus oturumu bulunmuyor</p>
         </div>
-
-        <div id="error-message" class="error"></div>
-        <div id="success-message" class="success"></div>
-
-        <div class="grid">
-            <main>
-                <section class="card">
-                    <h2>Aktif Ucus</h2>
-                    <p class="muted">Yeni bir ucus baslatildiginda checklist maddeleri bu oturuma kopyalanir.</p>
-                    <div id="active-session"></div>
-                </section>
-
-                <section class="card">
-                    <h2>Checklist</h2>
-                    <p class="muted">Ortam Kontrolu, Ucus Oncesi, Ucus Sirasinda ve Ucus Sonrasi maddelerini burada yonetin.</p>
-                    <div id="checklist-sections" class="section-list"></div>
-                </section>
-            </main>
-
-            <aside>
-                <section class="card">
-                    <h2>Acil Durum Prosedurleri</h2>
-                    <p class="muted">Bu bolum referans amaclidir ve normal checklist maddesi gibi tamamlanmaz.</p>
-                    <div id="reference-items"></div>
-                </section>
-
-                <section class="card">
-                    <h2>Gecmis Ucuslar</h2>
-                    <p class="muted">Tamamlanan ve aktif oturumlarin basit ozeti.</p>
-                    <div id="history"></div>
-                </section>
-            </aside>
+        
+        <div class="btn-group" id="btnGroup">
+            <button class="btn-primary" onclick="startSession()">Yeni Ucus Baslat</button>
+            <button class="btn-secondary" onclick="showHistory()">Gecmis Ucuslar</button>
+        </div>
+        
+        <div class="main-grid">
+            <div class="checklist-area" id="checklistArea">
+                <div class="no-session" id="noSession">
+                    <div class="no-session-icon">&#128640;</div>
+                    <p>Ucus kontrol listesini göruntulemek icin yeni bir oturum baslatin</p>
+                </div>
+                
+                <div id="checklistSections" style="display: none;">
+                    <div class="overall-progress" id="overallProgress">
+                        <div class="overall-progress-title">Genel Tamamlama</div>
+                        <div class="completion-rate" id="completionRate">0%</div>
+                        <div class="progress-bar" style="margin-top: 10px;">
+                            <div class="progress-fill" id="overallProgressFill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="reference-panel">
+                <div class="reference-header">
+                    <span class="section-icon">&#9888;</span>
+                    <span class="reference-title">Acil Durum Prosedürleri</span>
+                </div>
+                <div id="emergencyReference">
+                </div>
+            </div>
+        </div>
+        
+        <div class="history-panel" id="historyPanel" style="display: none;">
+            <h3 class="history-title">Gecmis Ucuslar</h3>
+            <div id="historyList"></div>
         </div>
     </div>
-
+    
+    <div class="modal" id="historyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Ucus Detaylari</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+    
     <script>
-        async function fetchDashboard() {
+        const API_BASE = '/api';
+        let currentSession = null;
+        let sessionStartTime = null;
+        let timerInterval = null;
+        let allItems = [];
+        
+        const sections = [
+            { id: 'ortam_kontrolu', name: 'Ortam Kontrolu', icon: '&#127781;' },
+            { id: 'ucus_oncesi', name: 'Ucus Oncesi', icon: '&#128736;' },
+            { id: 'ucus_sirasinda', name: 'Ucus Sirasinda', icon: '&#9992;' },
+            { id: 'ucus_sonrasi', name: 'Ucus Sonrasi', icon: '&#127937;' }
+        ];
+        
+        async function startSession() {
             try {
-                const [activeResponse, historyResponse] = await Promise.all([
-                    fetch('/api/active-session'),
-                    fetch('/api/history')
-                ]);
-
-                if (!activeResponse.ok || !historyResponse.ok) {
-                    throw new Error('Veriler yuklenemedi.');
-                }
-
-                const activePayload = await activeResponse.json();
-                const historyPayload = await historyResponse.json();
-                renderActiveSession(activePayload);
-                renderSections(activePayload.sections);
-                renderReferenceItems(activePayload.reference_items || []);
-                renderHistory(historyPayload);
+                const response = await fetch(`${API_BASE}/session/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                currentSession = data.session;
+                sessionStartTime = new Date(data.session.start_time);
+                loadActiveSession();
+                startTimer();
             } catch (error) {
-                showError(error.message || 'Beklenmeyen bir hata olustu.');
+                console.error('Oturum baslatma hatasi:', error);
+                alert('Oturum baslatilamadi');
             }
         }
-
-        function renderActiveSession(payload) {
-            const container = document.getElementById('active-session');
-
-            if (!payload.session) {
-                container.innerHTML = `
-                    <div class="empty">Su anda aktif ucus yok.</div>
-                    <form onsubmit="createSession(event)">
-                        <input id="flight-name" type="text" placeholder="Ornek: Test Ucusu 001" autocomplete="off">
-                        <button type="submit">Yeni Ucus Baslat</button>
-                    </form>
-                `;
-                return;
-            }
-
-            const session = payload.session;
-            const summary = payload.summary;
-            container.innerHTML = `
-                <h3>${escapeHtml(session.flight_name)}</h3>
-                <div class="status">${session.status === 'active' ? 'Aktif Ucus' : 'Tamamlandi'}</div>
-                <p class="muted" style="margin-top: 12px;">Baslangic: ${formatDate(session.started_at)}</p>
-                <div class="summary">
-                    <div class="summary-box">
-                        Tamamlanan
-                        <strong>${summary.completed_count}/${summary.total_count}</strong>
-                    </div>
-                    <div class="summary-box">
-                        Zorunlu
-                        <strong>${summary.required_completed}/${summary.required_total}</strong>
-                    </div>
-                    <div class="summary-box">
-                        Bekleyen
-                        <strong>${summary.pending_count}</strong>
-                    </div>
-                </div>
-                <form onsubmit="closeSession(event, ${session.id})">
-                    <button class="secondary" type="submit" ${payload.can_close ? '' : 'disabled'}>Ucusu Tamamla</button>
-                </form>
-            `;
-        }
-
-        function renderSections(sections) {
-            const container = document.getElementById('checklist-sections');
-
-            if (!sections || sections.length === 0) {
-                container.innerHTML = '<div class="empty">Checklist maddeleri aktif bir ucus baslatildiginda gorunecek.</div>';
-                return;
-            }
-
-            container.innerHTML = sections.map((section) => `
-                <section class="card">
-                    <div class="section-header">
-                        <h3>${escapeHtml(section.label)}</h3>
-                        <span>${section.completed_count}/${section.total_count} tamamlandi</span>
-                    </div>
-                    <div class="items">
-                        ${section.items.map((item) => `
-                            <label class="item ${item.completed ? 'completed' : ''}">
-                                <input type="checkbox" ${item.completed ? 'checked' : ''} onchange="toggleItem(${item.id}, this.checked)">
-                                <div>
-                                    <div class="item-title">${escapeHtml(item.title)}</div>
-                                    ${item.required ? '<div class="required-tag">Zorunlu</div>' : ''}
-                                </div>
-                            </label>
-                        `).join('')}
-                    </div>
-                </section>
-            `).join('');
-        }
-
-        function renderReferenceItems(items) {
-            const container = document.getElementById('reference-items');
-
-            if (!items.length) {
-                container.innerHTML = '<div class="empty">Referans proseduru bulunamadi.</div>';
-                return;
-            }
-
-            container.innerHTML = `
-                <div class="reference-box">
-                    <h3>Acil durumda once sakin kal</h3>
-                    <ul>
-                        ${items.map((item) => `<li>${escapeHtml(item.title)}</li>`).join('')}
-                    </ul>
-                </div>
-            `;
-        }
-
-        function renderHistory(history) {
-            const container = document.getElementById('history');
-
-            if (!history.length) {
-                container.innerHTML = '<div class="empty">Kayitli ucus yok.</div>';
-                return;
-            }
-
-            container.innerHTML = `
-                <ul class="history-list">
-                    ${history.map((session) => `
-                        <li>
-                            <strong>${escapeHtml(session.flight_name)}</strong><br>
-                            ${session.status === 'active' ? 'Aktif' : 'Tamamlandi'} | ${session.completed_count}/${session.total_count} madde | ${formatDate(session.started_at)}
-                        </li>
-                    `).join('')}
-                </ul>
-            `;
-        }
-
-        async function createSession(event) {
-            event.preventDefault();
-            const input = document.getElementById('flight-name');
-            const flightName = input.value.trim();
-
-            if (!flightName) {
-                showError('Lutfen bir ucus adi girin.');
-                input.focus();
-                return;
-            }
-
+        
+        async function loadActiveSession() {
             try {
-                const response = await fetch('/api/sessions', {
+                const response = await fetch(`${API_BASE}/session/active`);
+                const data = await response.json();
+                
+                if (data.session) {
+                    currentSession = data.session;
+                    sessionStartTime = new Date(data.session.start_time);
+                }
+                
+                allItems = data.items || [];
+                renderChecklist(allItems);
+                document.getElementById('noSession').style.display = 'none';
+                document.getElementById('checklistSections').style.display = 'block';
+                updateSessionInfo();
+                updateOverallProgress();
+            } catch (error) {
+                console.error('Oturum yukleme hatasi:', error);
+            }
+        }
+        
+        function updateSessionInfo() {
+            const sessionInfo = document.getElementById('sessionInfo');
+            const btnGroup = document.getElementById('btnGroup');
+            
+            if (currentSession && currentSession.status === 'active') {
+                sessionInfo.innerHTML = `
+                    <p>Ucus Oturumu Aktif</p>
+                    <div class="session-timer" id="sessionTimer">00:00:00</div>
+                    <div class="btn-group">
+                        <button class="btn-danger" onclick="closeSession()">Ucusu Bitir</button>
+                        <button class="btn-secondary" onclick="showHistory()">Gecmis Ucuslar</button>
+                    </div>
+                `;
+                startTimer();
+            } else {
+                sessionInfo.innerHTML = '<p>Henuz aktif bir ucus oturumu bulunmuyor</p>';
+                btnGroup.innerHTML = `
+                    <button class="btn-primary" onclick="startSession()">Yeni Ucus Baslat</button>
+                    <button class="btn-secondary" onclick="showHistory()">Gecmis Ucuslar</button>
+                `;
+            }
+        }
+        
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            timerInterval = setInterval(() => {
+                const now = new Date();
+                const diff = now - sessionStartTime;
+                const hours = Math.floor(diff / 3600000);
+                const minutes = Math.floor((diff % 3600000) / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
+                
+                const timer = document.getElementById('sessionTimer');
+                if (timer) {
+                    timer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+        
+        async function closeSession() {
+            if (!currentSession) return;
+            
+            if (!confirm('Ucus oturumunu kapatmak istediginizden emin misiniz?')) return;
+            
+            try {
+                await fetch(`${API_BASE}/session/close`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ flight_name: flightName })
+                    body: JSON.stringify({ session_id: currentSession.id })
                 });
-                const payload = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(payload.error || 'Ucus baslatilamadi.');
-                }
-
-                await fetchDashboard();
-                showSuccess('Yeni ucus oturumu baslatildi.');
+                
+                if (timerInterval) clearInterval(timerInterval);
+                currentSession = null;
+                allItems = [];
+                document.getElementById('noSession').style.display = 'block';
+                document.getElementById('checklistSections').style.display = 'none';
+                updateSessionInfo();
+                loadEmergencyReference();
             } catch (error) {
-                showError(error.message || 'Ucus baslatilamadi.');
+                console.error('Oturum kapatma hatasi:', error);
+                alert('Oturum kapatilamadi');
             }
         }
-
+        
+        function renderChecklist(items) {
+            const container = document.getElementById('checklistSections');
+            
+            // Keep the overall progress element
+            const overallProgress = document.getElementById('overallProgress');
+            container.innerHTML = '';
+            container.appendChild(overallProgress);
+            
+            sections.forEach(section => {
+                const sectionItems = items.filter(item => item.section === section.id);
+                if (sectionItems.length === 0) return;
+                
+                const completedCount = sectionItems.filter(item => item.completed).length;
+                const progress = Math.round((completedCount / sectionItems.length) * 100);
+                
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'checklist-section';
+                sectionDiv.innerHTML = `
+                    <div class="section-header">
+                        <span class="section-icon">${section.icon}</span>
+                        <span class="section-title">${section.name}</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${progress}%"></div>
+                        </div>
+                        <div class="progress-text">${completedCount}/${sectionItems.length} tamamlandi (${progress}%)</div>
+                    </div>
+                    <div class="section-items"></div>
+                `;
+                
+                const itemsContainer = sectionDiv.querySelector('.section-items');
+                sectionItems.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `checklist-item ${item.completed ? 'completed' : ''}`;
+                    itemDiv.onclick = () => toggleItem(item.id, !item.completed);
+                    itemDiv.innerHTML = `
+                        <div class="checkbox">
+                            <span class="checkmark">&#10003;</span>
+                        </div>
+                        <span class="item-text">${item.item_text}</span>
+                    `;
+                    itemsContainer.appendChild(itemDiv);
+                });
+                
+                container.appendChild(sectionDiv);
+            });
+        }
+        
+        function updateOverallProgress() {
+            const nonEmergencyItems = allItems.filter(item => !item.is_emergency);
+            const completedItems = nonEmergencyItems.filter(item => item.completed);
+            const totalItems = nonEmergencyItems.length;
+            const completedCount = completedItems.length;
+            const percentage = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
+            
+            const rateEl = document.getElementById('completionRate');
+            const fillEl = document.getElementById('overallProgressFill');
+            
+            if (rateEl) rateEl.textContent = `${percentage}%`;
+            if (fillEl) fillEl.style.width = `${percentage}%`;
+        }
+        
         async function toggleItem(itemId, completed) {
+            if (!currentSession) return;
+            
             try {
-                const response = await fetch(`/api/session-items/${itemId}`, {
-                    method: 'PUT',
+                await fetch(`${API_BASE}/session/update`, {
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ completed })
+                    body: JSON.stringify({
+                        session_id: currentSession.id,
+                        template_item_id: itemId,
+                        completed: completed
+                    })
                 });
-                const payload = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(payload.error || 'Checklist maddesi guncellenemedi.');
-                }
-
-                renderActiveSession(payload);
-                renderSections(payload.sections);
-                renderReferenceItems(payload.reference_items || []);
+                
+                // Update local state
+                const item = allItems.find(i => i.id === itemId);
+                if (item) item.completed = completed;
+                
+                renderChecklist(allItems);
+                updateOverallProgress();
             } catch (error) {
-                showError(error.message || 'Checklist maddesi guncellenemedi.');
-                await fetchDashboard();
+                console.error('Ogëe guncelleme hatasi:', error);
             }
         }
-
-        async function closeSession(event, sessionId) {
-            event.preventDefault();
-
+        
+        async function loadEmergencyReference() {
             try {
-                const response = await fetch(`/api/sessions/${sessionId}/close`, {
-                    method: 'POST'
+                const response = await fetch(`${API_BASE}/emergency/reference`);
+                const items = await response.json();
+                
+                const container = document.getElementById('emergencyReference');
+                container.innerHTML = '';
+                
+                items.forEach((item, index) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'reference-item';
+                    itemDiv.innerHTML = `
+                        <span class="reference-number">${index + 1}</span>
+                        ${item.item_text}
+                    `;
+                    container.appendChild(itemDiv);
                 });
-                const payload = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(payload.error || 'Ucus tamamlanamadi.');
-                }
-
-                await fetchDashboard();
-                showSuccess('Ucus oturumu kapatildi.');
             } catch (error) {
-                showError(error.message || 'Ucus tamamlanamadi.');
+                console.error('Acil durum referansi yukleme hatasi:', error);
             }
         }
-
-        function formatDate(value) {
-            if (!value) {
-                return '-';
+        
+        async function showHistory() {
+            const historyPanel = document.getElementById('historyPanel');
+            historyPanel.style.display = historyPanel.style.display === 'none' ? 'block' : 'none';
+            
+            if (historyPanel.style.display === 'block') {
+                try {
+                    const response = await fetch(`${API_BASE}/session/history`);
+                    const sessions = await response.json();
+                    
+                    const listContainer = document.getElementById('historyList');
+                    listContainer.innerHTML = '';
+                    
+                    if (sessions.length === 0) {
+                        listContainer.innerHTML = '<p style="color: #94a3b8;">Henuz kayitli ucus bulunmuyor</p>';
+                        return;
+                    }
+                    
+                    sessions.forEach(session => {
+                        const startDate = new Date(session.start_time);
+                        const endDate = session.end_time ? new Date(session.end_time) : null;
+                        const duration = endDate ? Math.round((endDate - startDate) / 60000) : '-';
+                        
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'history-item';
+                        itemDiv.onclick = () => showSessionDetail(session.id);
+                        itemDiv.innerHTML = `
+                            <div>
+                                <div class="history-date">${startDate.toLocaleDateString('tr-TR')} ${startDate.toLocaleTimeString('tr-TR')}</div>
+                                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">Sure: ${duration} dakika</div>
+                            </div>
+                            <span class="history-status ${session.status === 'completed' ? 'status-completed' : 'status-active'}">
+                                ${session.status === 'completed' ? 'Tamamlandi' : 'Aktif'}
+                            </span>
+                        `;
+                        listContainer.appendChild(itemDiv);
+                    });
+                } catch (error) {
+                    console.error('Gecmis yukleme hatasi:', error);
+                }
             }
-
-            const parsed = new Date(value.replace(' ', 'T'));
-            if (Number.isNaN(parsed.getTime())) {
-                return value;
+        }
+        
+        async function showSessionDetail(sessionId) {
+            try {
+                const response = await fetch(`${API_BASE}/session/${sessionId}`);
+                const data = await response.json();
+                
+                const modal = document.getElementById('historyModal');
+                const modalTitle = document.getElementById('modalTitle');
+                const modalContent = document.getElementById('modalContent');
+                
+                const startDate = new Date(data.session.start_time);
+                const endDate = data.session.end_time ? new Date(data.session.end_time) : null;
+                const duration = endDate ? Math.round((endDate - startDate) / 60000) : '-';
+                
+                modalTitle.textContent = `Ucus Detaylari - ${startDate.toLocaleDateString('tr-TR')}`;
+                
+                let html = `
+                    <p style="color: #94a3b8; margin-bottom: 20px;">
+                        Baslangic: ${startDate.toLocaleDateString('tr-TR')} ${startDate.toLocaleTimeString('tr-TR')}<br>
+                        Bitis: ${endDate ? endDate.toLocaleDateString('tr-TR') + ' ' + endDate.toLocaleTimeString('tr-TR') : 'Devam ediyor'}<br>
+                        Sure: ${duration} dakika
+                    </p>
+                `;
+                
+                sections.forEach(section => {
+                    const sectionItems = data.items.filter(item => item.section === section.id);
+                    if (sectionItems.length === 0) return;
+                    
+                    const completedCount = sectionItems.filter(item => item.completed).length;
+                    const progress = Math.round((completedCount / sectionItems.length) * 100);
+                    
+                    html += `
+                        <div style="margin-bottom: 20px;">
+                            <h4 style="color: #60a5fa; margin-bottom: 10px;">${section.name} (${progress}%)</h4>
+                    `;
+                    
+                    sectionItems.forEach(item => {
+                        const status = item.completed ? 'Tamamlandi' : 'Tamamlanmadi';
+                        const color = item.completed ? '#4ade80' : '#ef4444';
+                        html += `
+                            <div style="padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 4px;">
+                                <span style="color: ${color}; margin-right: 8px;">${item.completed ? '&#10003;' : '&#10007;'}</span>
+                                ${item.item_text}
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                });
+                
+                modalContent.innerHTML = html;
+                modal.classList.add('active');
+            } catch (error) {
+                console.error('Oturum detay yukleme hatasi:', error);
             }
-
-            return parsed.toLocaleString('tr-TR');
         }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        
+        function closeModal() {
+            document.getElementById('historyModal').classList.remove('active');
         }
-
-        function showError(message) {
-            const box = document.getElementById('error-message');
-            box.textContent = message;
-            box.classList.add('show');
-            document.getElementById('success-message').classList.remove('show');
-        }
-
-        function showSuccess(message) {
-            const box = document.getElementById('success-message');
-            box.textContent = message;
-            box.classList.add('show');
-            document.getElementById('error-message').classList.remove('show');
-        }
-
-        fetchDashboard();
+        
+        // Close modal on outside click
+        document.getElementById('historyModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            loadEmergencyReference();
+            
+            try {
+                const response = await fetch(`${API_BASE}/session/active`);
+                const data = await response.json();
+                
+                if (data.session) {
+                    currentSession = data.session;
+                    sessionStartTime = new Date(data.session.start_time);
+                    loadActiveSession();
+                    updateSessionInfo();
+                }
+            } catch (error) {
+                console.error('Aktif oturum kontrolu hatasi:', error);
+            }
+        });
     </script>
 </body>
 </html>
-"""
+'''
 
+@app.route('/')
+def index():
+    """Serve the main application page."""
+    return render_template_string(HTML_TEMPLATE)
 
-init_db()
-
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", "5000")))
+if __name__ == '__main__':
+    init_db()
+    print("Drone Ucus Kontrol Listesi baslatiliyor...")
+    print("Tarayicida http://localhost:5000 adresini acin")
+    app.run(debug=True, host='0.0.0.0', port=5000)
