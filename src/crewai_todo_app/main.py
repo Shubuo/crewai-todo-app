@@ -1,12 +1,23 @@
 #!/usr/bin/env python
+import os
 import sys
 import warnings
 
 from dotenv import load_dotenv
 
-from crewai_todo_app.crew import CrewAIDroneChecklistApp
+load_dotenv(override=True)
+os.environ.setdefault("OPENAI_API_BASE", "https://openrouter.ai/api/v1")
+os.environ.setdefault("OPENAI_MODEL_NAME", "openrouter/owl-alpha")
+if os.environ.get("OPENAI_API_KEY"):
+    os.environ["OPENROUTER_API_KEY"] = os.environ["OPENAI_API_KEY"]
+if os.environ.get("OPENROUTER_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = os.environ["OPENROUTER_API_KEY"]
+if os.environ.get("OPENAI_API_BASE"):
+    os.environ["OPENROUTER_API_BASE"] = os.environ["OPENAI_API_BASE"]
+if os.environ.get("OPENROUTER_API_BASE") and not os.environ.get("OPENAI_API_BASE"):
+    os.environ["OPENAI_API_BASE"] = os.environ["OPENROUTER_API_BASE"]
 
-load_dotenv()
+from crewai_todo_app.crew import CrewAIDroneChecklistApp
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 

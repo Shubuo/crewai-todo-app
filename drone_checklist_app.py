@@ -1,1162 +1,624 @@
-import sqlite3
+from __future__ import annotations
+
 import os
-from datetime import datetime
-from flask import Flask, render_template_string, request, jsonify, g
+from pathlib import Path
 
-# Configuration
-DATABASE = 'drone_checklist.db'
-app = Flask(__name__)
-app.config['DATABASE'] = DATABASE
+from dotenv import load_dotenv
+from flask import Flask, jsonify, render_template_string, request
 
-# Database helpers
-def get_db():
-    """Get database connection for current request context."""
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
-    return db
+from mission_runtime.reporting import build_mission_report
+from mission_runtime.store import MissionStore
 
-@app.teardown_appcontext
-def close_connection(exception):
-    """Close database connection at end of request."""
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
+load_dotenv(override=True)
 
-def init_db():
-    """Initialize database with tables and seed data."""
-    with app.app_context():
-        db = get_db()
-        cursor = db.cursor()
-        
-        # Create checklist template items table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS template_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                section TEXT NOT NULL,
-                item_text TEXT NOT NULL,
-                is_emergency BOOLEAN DEFAULT 0,
-                sort_order INTEGER DEFAULT 0
-            )
-        ''')
-        
-        # Create flight sessions table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS flight_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                start_time TEXT NOT NULL,
-                end_time TEXT,
-                status TEXT DEFAULT 'active',
-                notes TEXT
-            )
-        ''')
-        
-        # Create session items table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS session_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id INTEGER NOT NULL,
-                template_item_id INTEGER NOT NULL,
-                completed INTEGER DEFAULT 0,
-                completed_at TEXT,
-                FOREIGN KEY (session_id) REFERENCES flight_sessions(id),
-                FOREIGN KEY (template_item_id) REFERENCES template_items(id),
-                UNIQUE(session_id, template_item_id)
-            )
-        ''')
-        
-        db.commit()
-        
-        # Seed default items if table is empty
-        cursor.execute('SELECT COUNT(*) FROM template_items')
-        if cursor.fetchone()[0] == 0:
-            seed_default_items(db)
 
-def seed_default_items(db):
-    """Populate database with default Turkish drone checklist items."""
-    cursor = db.cursor()
-    
-    default_items = [
-        # Ortam Kontrolu
-        ('ortam_kontrolu', 'Hava durumu uygun mu? (ruzgar, yagmur, görüs mesafesi)', 0, 1),
-        ('ortam_kontrolu', 'Ucus alani izinli mi?', 0, 2),
-        ('ortam_kontrolu', 'Guvenli inis/kalkis alani mevcut mu?', 0, 3),
-        ('ortam_kontrolu', 'Elektromanyetik girisim riski var mi?', 0, 4),
-        ('ortam_kontrolu', 'Ucus alaninda insan veya hayvan var mi?', 0, 5),
-        ('ortam_kontrolu', 'GPS engeli veya parazit kaynagi var mi?', 0, 6),
-        
-        # Ucus Oncesi
-        ('ucus_oncesi', 'Pil sarj seviyesi kontrol edildi mi? (en az %80)', 0, 1),
-        ('ucus_oncesi', 'Pil sicakligi normal aralikta mi?', 0, 2),
-        ('ucus_oncesi', 'Pervane ve motorlar saglam mi? (catlak, hasar kontrolu)', 0, 3),
-        ('ucus_oncesi', 'Pervaneler dogru sekilde takili mi?', 0, 4),
-        ('ucus_oncesi', 'GPS sinyali yeterli mi? (en az 8 uydu)', 0, 5),
-        ('ucus_oncesi', 'Kumanda pili kontrol edildi mi?', 0, 6),
-        ('ucus_oncesi', 'Kalkis noktasinda engel var mi?', 0, 7),
-        ('ucus_oncesi', 'Uzaktan kumanda baglantisi test edildi mi?', 0, 8),
-        ('ucus_oncesi', 'Kamera ve gimbal fonksiyonel mi?', 0, 9),
-        ('ucus_oncesi', 'Hafiza karti takili ve bos alan var mi?', 0, 10),
-        ('ucus_oncesi', 'Firmware guncellemesi gerekli mi?', 0, 11),
-        ('ucus_oncesi', 'Ev noktasi (Home Point) ayari yapildi mi?', 0, 12),
-        
-        # Ucus Sirasinda
-        ('ucus_sirasinda', 'Kalkis normal mi? (titreme, gurultu kontrolu)', 0, 1),
-        ('ucus_sirasinda', 'Ses ve titreşim normal mi?', 0, 2),
-        ('ucus_sirasinda', 'ucus yuksekligi ve mesafe guvenli mi?', 0, 3),
-        ('ucus_sirasinda', 'Pil seviyesi yeterli mi? (en az %30 kalacak)', 0, 4),
-        ('ucus_sirasinda', 'GPS ve navigasyon dogru calisiyor mu?', 0, 5),
-        ('ucus_sirasinda', 'Hava kosullarinda degisiklik oldu mu?', 0, 6),
-        ('ucus_sirasinda', 'Manevra ve kontroller duzgun calisiyor mu?', 0, 7),
-        ('ucus_sirasinda', 'Kamera göruntuü kalitesi нормал mu?', 0, 8),
-        ('ucus_sirasinda', 'Ruzgar direnci yeterli mi?', 0, 9),
-        ('ucus_sirasinda', 'Sinyal gücü stabil mi?', 0, 10),
-        
-        # Acil Durum Prosedurleri (reference only)
-        ('acil_durum', 'Acil inis proseduru: Yavasca alcagmaya baslayin', 1, 1),
-        ('acil_durum', 'Sinyal kaybi durumunda: Otomatik geri dönüsü bekleyin', 1, 2),
-        ('acil_durum', 'Pil uyarisi: Derhal inise gecin', 1, 3),
-        ('acil_durum', 'Kritik ariza: Motorlari kapatin ve düsüsü izleyin', 1, 4),
-        ('acil_durum', 'Yasadisi bolge girisi: Derhal cikis yapin', 1, 5),
-        ('acil_durum', 'Uzaktan kumanda pil uyarisi: Acil iniş baslayin', 1, 6),
-        ('acil_durum', 'GPS kaybi: Manuel modda yavasca inis yapin', 1, 7),
-        ('acil_durum', 'Firmware arizasi: Motorlari durdurun', 1, 8),
-        ('acil_durum', 'Kaza durumu: Motorlari hemen kapatin', 1, 9),
-        ('acil_durum', 'Uzaktan kumanda baglanti kopmasi: 3 dakika bekleyin', 1, 10),
-        
-        # Ucus Sonrasi
-        ('ucus_sonrasi', 'Drone hasar kontrol edildi mi?', 0, 1),
-        ('ucus_sonrasi', 'Pil sicakligi normal mi?', 0, 2),
-        ('ucus_sonrasi', 'Veriler güvenli bir sekilde kaydedildi mi?', 0, 3),
-        ('ucus_sonrasi', 'Ekipman temizligi yapildi mi?', 0, 4),
-        ('ucus_sonrasi', 'Ucus günlügü dolduruldu mu?', 0, 5),
-        ('ucus_sonrasi', 'Piller saglam mi ve dogru saklandi mi?', 0, 6),
-        ('ucus_sonrasi', 'Hafiza karti yedeklendi mi?', 0, 7),
-        ('ucus_sonrasi', 'Ekipman eksik veya hasarli var mi?', 0, 8),
-    ]
-    
-    for item in default_items:
-        cursor.execute('''
-            INSERT INTO template_items (section, item_text, is_emergency, sort_order)
-            VALUES (?, ?, ?, ?)
-        ''', item)
-    
-    db.commit()
+STATE_ORDER = [
+    "draft",
+    "preflight",
+    "ready_for_takeoff",
+    "in_flight",
+    "rth",
+    "landed",
+    "postflight",
+    "completed",
+]
 
-# API Routes
-@app.route('/api/session/start', methods=['POST'])
-def start_session():
-    """Start a new flight session."""
-    db = get_db()
-    cursor = db.cursor()
-    
-    start_time = datetime.now().isoformat()
-    cursor.execute('''
-        INSERT INTO flight_sessions (start_time, status)
-        VALUES (?, 'active')
-    ''', (start_time,))
-    
-    session_id = cursor.lastrowid
-    db.commit()
-    
-    return jsonify({
-        'success': True,
-        'session': {
-            'id': session_id,
-            'start_time': start_time,
-            'status': 'active'
-        }
-    })
 
-@app.route('/api/session/active', methods=['GET'])
-def get_active_session():
-    """Get the current active flight session."""
-    db = get_db()
-    cursor = db.cursor()
-    
-    cursor.execute('''
-        SELECT id, start_time, end_time, status, notes
-        FROM flight_sessions
-        WHERE status = 'active'
-        ORDER BY id DESC
-        LIMIT 1
-    ''')
-    
-    session = cursor.fetchone()
-    if not session:
-        return jsonify({'session': None, 'items': []})
-    
-    cursor.execute('''
-        SELECT ti.id, ti.item_text, ti.section, ti.is_emergency, ti.sort_order,
-               COALESCE(si.completed, 0) as completed, si.completed_at
-        FROM template_items ti
-        LEFT JOIN session_items si ON ti.id = si.template_item_id AND si.session_id = ?
-        ORDER BY ti.section, ti.sort_order
-    ''', (session['id'],))
-    
-    items = cursor.fetchall()
-    
-    return jsonify({
-        'session': dict(session),
-        'items': [dict(item) for item in items]
-    })
+def runtime_base_dir() -> Path:
+    if os.getenv("MISSION_DATA_DIR"):
+        return Path(os.environ["MISSION_DATA_DIR"])
+    if os.getenv("VERCEL"):
+        return Path("/tmp/drone-mission-data")
+    return Path("runtime_data")
 
-@app.route('/api/session/items', methods=['GET'])
-def get_session_items():
-    """Get checklist items for a session."""
-    session_id = request.args.get('session_id', type=int)
-    
-    if not session_id:
-        return jsonify({'error': 'session_id required'}), 400
-    
-    db = get_db()
-    cursor = db.cursor()
-    
-    cursor.execute('''
-        SELECT ti.id, ti.item_text, ti.section, ti.is_emergency, ti.sort_order,
-               COALESCE(si.completed, 0) as completed, si.completed_at
-        FROM template_items ti
-        LEFT JOIN session_items si ON ti.id = si.template_item_id AND si.session_id = ?
-        ORDER BY ti.section, ti.sort_order
-    ''', (session_id,))
-    
-    items = cursor.fetchall()
-    return jsonify([dict(item) for item in items])
 
-@app.route('/api/session/update', methods=['POST'])
-def update_session_item():
-    """Update a checklist item completion status."""
-    data = request.get_json()
-    
-    if not all(k in data for k in ['session_id', 'template_item_id', 'completed']):
-        return jsonify({'error': 'Missing required fields: session_id, template_item_id, completed'}), 400
-    
-    db = get_db()
-    cursor = db.cursor()
-    
-    if data['completed']:
-        completed_at = datetime.now().isoformat()
-        cursor.execute('''
-            INSERT OR REPLACE INTO session_items (session_id, template_item_id, completed, completed_at)
-            VALUES (?, ?, 1, ?)
-        ''', (data['session_id'], data['template_item_id'], completed_at))
-    else:
-        cursor.execute('''
-            DELETE FROM session_items 
-            WHERE session_id = ? AND template_item_id = ?
-        ''', (data['session_id'], data['template_item_id']))
-    
-    db.commit()
-    return jsonify({'success': True})
+def build_timeline(state: str) -> list[dict]:
+    if state not in STATE_ORDER:
+        state = "preflight"
+    current_index = STATE_ORDER.index(state)
+    timeline = []
+    for index, name in enumerate(STATE_ORDER[1:]):
+        order_index = index + 1
+        if order_index < current_index:
+            status = "done"
+        elif order_index == current_index:
+            status = "current"
+        else:
+            status = "upcoming"
+        timeline.append({"state": name, "status": status})
+    return timeline
 
-@app.route('/api/session/close', methods=['POST'])
-def close_session():
-    """Close an active flight session."""
-    data = request.get_json()
-    session_id = data.get('session_id')
-    notes = data.get('notes', '')
-    
-    if not session_id:
-        return jsonify({'error': 'session_id required'}), 400
-    
-    db = get_db()
-    cursor = db.cursor()
-    
-    cursor.execute('''
-        UPDATE flight_sessions 
-        SET status = 'completed', end_time = ?, notes = ?
-        WHERE id = ? AND status = 'active'
-    ''', (datetime.now().isoformat(), notes, session_id))
-    
-    db.commit()
-    
-    if cursor.rowcount == 0:
-        return jsonify({'error': 'Session not found or already closed'}), 404
-    
-    return jsonify({'success': True})
 
-@app.route('/api/session/history', methods=['GET'])
-def get_session_history():
-    """Get list of past flight sessions."""
-    db = get_db()
-    cursor = db.cursor()
-    
-    cursor.execute('''
-        SELECT id, start_time, end_time, status, notes
-        FROM flight_sessions
-        ORDER BY start_time DESC
-        LIMIT 100
-    ''')
-    
-    sessions = cursor.fetchall()
-    return jsonify([dict(row) for row in sessions])
+def serialize_mission(supervisor) -> dict:
+    payload = supervisor.to_api_payload()
+    payload["timeline"] = build_timeline(supervisor.state)
+    return payload
 
-@app.route('/api/session/<int:session_id>', methods=['GET'])
-def get_session_detail(session_id):
-    """Get details of a specific session."""
-    db = get_db()
-    cursor = db.cursor()
-    
-    cursor.execute('''
-        SELECT id, start_time, end_time, status, notes
-        FROM flight_sessions
-        WHERE id = ?
-    ''', (session_id,))
-    
-    session = cursor.fetchone()
-    if not session:
-        return jsonify({'error': 'Session not found'}), 404
-    
-    cursor.execute('''
-        SELECT ti.id, ti.item_text, ti.section, ti.is_emergency, ti.sort_order,
-               COALESCE(si.completed, 0) as completed, si.completed_at
-        FROM template_items ti
-        LEFT JOIN session_items si ON ti.id = si.template_item_id AND si.session_id = ?
-        ORDER BY ti.section, ti.sort_order
-    ''', (session_id,))
-    
-    items = cursor.fetchall()
-    
-    return jsonify({
-        'session': dict(session),
-        'items': [dict(item) for item in items]
-    })
 
-@app.route('/api/emergency/reference', methods=['GET'])
-def get_emergency_reference():
-    """Get emergency procedures as reference panel items."""
-    db = get_db()
-    cursor = db.cursor()
-    
-    cursor.execute('''
-        SELECT id, item_text, sort_order
-        FROM template_items
-        WHERE is_emergency = 1
-        ORDER BY sort_order
-    ''')
-    
-    items = cursor.fetchall()
-    return jsonify([dict(row) for row in items])
+def create_app(test_config: dict | None = None) -> Flask:
+    app = Flask(__name__)
+    app.config["MISSION_STORE"] = MissionStore(runtime_base_dir())
+    if test_config:
+        app.config.update(test_config)
+        if "MISSION_STORE" not in test_config:
+            app.config["MISSION_STORE"] = MissionStore(runtime_base_dir())
 
-# HTML Template - Single Page Turkish UI
-HTML_TEMPLATE = '''
+    def mission_store() -> MissionStore:
+        return app.config["MISSION_STORE"]
+
+    @app.route("/")
+    def index():
+        return render_template_string(HTML_TEMPLATE)
+
+    @app.route("/api/missions", methods=["POST"])
+    def create_mission():
+        payload = request.get_json(silent=True) or {}
+        mission_name = payload.get("mission_name", "Demo Mission")
+        mission = mission_store().create(mission_name)
+        return jsonify(serialize_mission(mission))
+
+    @app.route("/api/missions/active", methods=["GET"])
+    def get_active_mission():
+        mission = mission_store().get_active()
+        if mission is None:
+            return jsonify(None)
+        return jsonify(serialize_mission(mission))
+
+    @app.route("/api/missions/<mission_id>/step", methods=["POST"])
+    def step_mission(mission_id: str):
+        mission = mission_store().get(mission_id)
+        if mission is None:
+            return jsonify({"error": "Mission not found"}), 404
+        event = mission.process_next_event()
+        response = serialize_mission(mission)
+        response["processed_event"] = event.to_dict() if event else None
+        return jsonify(response)
+
+    @app.route("/api/missions/<mission_id>/approve", methods=["POST"])
+    def approve_mission_action(mission_id: str):
+        mission = mission_store().get(mission_id)
+        if mission is None:
+            return jsonify({"error": "Mission not found"}), 404
+        payload = request.get_json(force=True) or {}
+        mission.approve_action(payload.get("action", ""), bool(payload.get("approved", False)))
+        return jsonify(serialize_mission(mission))
+
+    @app.route("/api/missions/<mission_id>/answer", methods=["POST"])
+    def answer_mission_question(mission_id: str):
+        mission = mission_store().get(mission_id)
+        if mission is None:
+            return jsonify({"error": "Mission not found"}), 404
+        payload = request.get_json(force=True) or {}
+        mission.answer_question(payload.get("question_id", ""), bool(payload.get("answer", False)))
+        return jsonify(serialize_mission(mission))
+
+    @app.route("/api/missions/<mission_id>/events", methods=["GET"])
+    def mission_events(mission_id: str):
+        mission = mission_store().get(mission_id)
+        if mission is None:
+            return jsonify({"error": "Mission not found"}), 404
+        return jsonify({"mission_id": mission_id, "events": mission.event_log})
+
+    @app.route("/api/missions/<mission_id>/report", methods=["GET"])
+    def mission_report(mission_id: str):
+        mission = mission_store().get(mission_id)
+        if mission is None:
+            return jsonify({"error": "Mission not found"}), 404
+        return jsonify(build_mission_report(mission))
+
+    return app
+
+
+app = create_app()
+
+
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drone Ucus Kontrol Listesi</title>
+    <title>Drone Mission Supervisor</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg: #0f1a20;
+            --bg-soft: #15252d;
+            --panel: rgba(20, 35, 43, 0.86);
+            --border: rgba(162, 194, 207, 0.16);
+            --text: #edf6f8;
+            --muted: #90aab2;
+            --accent: #f4b942;
+            --success: #5ad09b;
+            --warning: #ffb454;
+            --danger: #ff7474;
         }
-        
+        * { box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            margin: 0;
+            font-family: "Avenir Next", "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(244, 185, 66, 0.15), transparent 30%),
+                linear-gradient(180deg, #081217 0%, var(--bg) 100%);
+            color: var(--text);
             min-height: 100vh;
-            padding: 20px;
-            color: #fff;
         }
-        
-        .container {
-            max-width: 1200px;
+        .shell {
+            max-width: 1380px;
             margin: 0 auto;
+            padding: 28px 20px 40px;
         }
-        
-        header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        h1 {
-            font-size: 2em;
-            color: #4ade80;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            color: #94a3b8;
-        }
-        
-        .session-info {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
-        .session-timer {
-            font-size: 1.5em;
-            color: #4ade80;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        
-        .btn-group {
+        .hero {
             display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-        
-        button {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary {
-            background: #4ade80;
-            color: #1a1a2e;
-        }
-        
-        .btn-primary:hover {
-            background: #22c55e;
-            transform: translateY(-2px);
-        }
-        
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #dc2626;
-        }
-        
-        .btn-secondary {
-            background: #64748b;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #475569;
-        }
-        
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1fr 350px;
+            justify-content: space-between;
             gap: 20px;
+            align-items: end;
+            margin-bottom: 24px;
         }
-        
-        @media (max-width: 900px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.4rem);
+            letter-spacing: -0.04em;
         }
-        
-        .checklist-section {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 20px;
+        .hero p {
+            margin: 10px 0 0;
+            color: var(--muted);
+            max-width: 760px;
+        }
+        .hero .badge {
+            background: rgba(244, 185, 66, 0.12);
+            color: var(--accent);
+            border: 1px solid rgba(244, 185, 66, 0.24);
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 22px 40px rgba(0, 0, 0, 0.24);
+        }
+        .start-panel {
+            padding: 24px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
             margin-bottom: 20px;
         }
-        
-        .section-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .section-title {
-            font-size: 1.2em;
-            color: #60a5fa;
-        }
-        
-        .section-icon {
-            font-size: 1.5em;
-        }
-        
-        .checklist-item {
-            display: flex;
-            align-items: center;
-            padding: 12px;
-            margin-bottom: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .checklist-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .checklist-item.completed {
-            background: rgba(74, 222, 128, 0.1);
-            border-left: 4px solid #4ade80;
-        }
-        
-        .checklist-item.completed .item-text {
-            text-decoration: line-through;
-            opacity: 0.7;
-        }
-        
-        .checkbox {
-            width: 24px;
-            height: 24px;
-            border: 2px solid #64748b;
-            border-radius: 6px;
-            margin-right: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
-        }
-        
-        .checklist-item.completed .checkbox {
-            background: #4ade80;
-            border-color: #4ade80;
-        }
-        
-        .checkmark {
-            display: none;
-            color: #1a1a2e;
-            font-weight: bold;
-        }
-        
-        .checklist-item.completed .checkmark {
-            display: block;
-        }
-        
-        .item-text {
+        .start-panel input {
             flex: 1;
+            min-width: 220px;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px 16px;
         }
-        
-        .reference-panel {
-            background: linear-gradient(135deg, #7c2d12 0%, #9a3412 100%);
-            border-radius: 12px;
-            padding: 20px;
-            position: sticky;
-            top: 20px;
-            max-height: calc(100vh - 40px);
-            overflow-y: auto;
-        }
-        
-        .reference-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
-        .reference-title {
-            font-size: 1.1em;
-            color: #fed7aa;
-        }
-        
-        .reference-item {
-            padding: 12px;
-            margin-bottom: 8px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            border-left: 3px solid #f97316;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        
-        .reference-number {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            background: #f97316;
-            color: white;
-            border-radius: 50%;
-            text-align: center;
-            line-height: 24px;
-            font-size: 12px;
-            margin-right: 10px;
-            flex-shrink: 0;
-        }
-        
-        .history-panel {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        
-        .history-title {
-            font-size: 1.1em;
-            color: #94a3b8;
-            margin-bottom: 15px;
-        }
-        
-        .history-item {
-            padding: 12px;
-            margin-bottom: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        .history-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .history-date {
-            color: #60a5fa;
-        }
-        
-        .history-status {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-        }
-        
-        .status-completed {
-            background: rgba(74, 222, 128, 0.2);
-            color: #4ade80;
-        }
-        
-        .status-active {
-            background: rgba(96, 165, 250, 0.2);
-            color: #60a5fa;
-        }
-        
-        .no-session {
-            text-align: center;
-            padding: 60px 20px;
-            color: #94a3b8;
-        }
-        
-        .no-session-icon {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-        
-        .progress-container {
-            margin-bottom: 15px;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #4ade80, #22c55e);
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-        
-        .progress-text {
-            text-align: right;
-            font-size: 12px;
-            color: #94a3b8;
-            margin-top: 5px;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        
-        .modal.active {
-            display: flex;
-        }
-        
-        .modal-content {
-            background: #1a1a2e;
-            border-radius: 12px;
-            padding: 30px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .modal-close {
-            background: none;
+        .btn {
             border: none;
-            color: #fff;
-            font-size: 24px;
+            border-radius: 16px;
+            padding: 12px 18px;
+            font-weight: 700;
             cursor: pointer;
-            padding: 0;
         }
-        
-        .overall-progress {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
+        .btn-primary { background: var(--accent); color: #22180a; }
+        .btn-secondary { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--border); }
+        .btn-danger { background: rgba(255,116,116,0.16); color: #ffd2d2; border: 1px solid rgba(255,116,116,0.3); }
+        .grid {
+            display: grid;
+            grid-template-columns: 0.95fr 1.4fr 1fr;
+            gap: 18px;
+            align-items: start;
         }
-        
-        .overall-progress-title {
-            font-size: 14px;
-            color: #94a3b8;
+        .card {
+            padding: 20px;
+        }
+        .card h2, .card h3 {
+            margin: 0 0 14px;
+            font-size: 1.05rem;
+            letter-spacing: -0.02em;
+        }
+        .timeline-item, .inbox-item, .question-item, .event-item, .check-item {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.03);
             margin-bottom: 10px;
         }
-        
-        .completion-rate {
-            font-size: 2em;
-            font-weight: bold;
-            color: #4ade80;
+        .timeline-item.done { border-color: rgba(90, 208, 155, 0.35); }
+        .timeline-item.current { border-color: rgba(244, 185, 66, 0.4); background: rgba(244,185,66,0.08); }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+        .status-success { background: rgba(90, 208, 155, 0.14); color: var(--success); }
+        .status-warning { background: rgba(255, 180, 84, 0.16); color: var(--warning); }
+        .status-danger { background: rgba(255, 116, 116, 0.14); color: var(--danger); }
+        .status-muted { background: rgba(255,255,255,0.06); color: var(--muted); }
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .metric {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px;
+            background: rgba(255,255,255,0.03);
+        }
+        .metric-label {
+            color: var(--muted);
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .metric-value {
+            margin-top: 8px;
+            font-size: 1.35rem;
+            font-weight: 800;
+        }
+        .section-label {
+            margin: 18px 0 10px;
+            color: var(--accent);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 0.78rem;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-top: 18px;
+        }
+        .report {
+            white-space: pre-wrap;
+            color: var(--muted);
+            font-size: 0.94rem;
+        }
+        .empty {
+            color: var(--muted);
+            border: 1px dashed var(--border);
+            border-radius: 16px;
+            padding: 16px;
+        }
+        @media (max-width: 1080px) {
+            .grid, .two-col { grid-template-columns: 1fr; }
+            .hero { flex-direction: column; align-items: start; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Drone Ucus Kontrol Listesi</h1>
-            <p class="subtitle">Güvenli ucuslar icin kontrol listenizi tamamlayin</p>
-        </header>
-        
-        <div class="session-info" id="sessionInfo">
-            <p>Henüz aktif bir ucus oturumu bulunmuyor</p>
+    <div class="shell">
+        <div class="hero">
+            <div>
+                <h1>Mission Supervisor Console</h1>
+                <p>Checklist artik agent destekli ilerliyor. Telemetri log'u sirayla okunuyor, fiziksel kontroller operatore soruluyor ve kritik eylemler onay gerektiriyor.</p>
+            </div>
+            <div class="badge">Balanced Approval Mode</div>
         </div>
-        
-        <div class="btn-group" id="btnGroup">
-            <button class="btn-primary" onclick="startSession()">Yeni Ucus Baslat</button>
-            <button class="btn-secondary" onclick="showHistory()">Gecmis Ucuslar</button>
+
+        <div class="panel start-panel">
+            <input id="mission-name" value="Demo Mission" placeholder="Mission name">
+            <button class="btn btn-primary" onclick="startMission()">Ornek Gorev Baslat</button>
+            <button class="btn btn-secondary" onclick="loadActiveMission()">Aktif Gorevi Yenile</button>
         </div>
-        
-        <div class="main-grid">
-            <div class="checklist-area" id="checklistArea">
-                <div class="no-session" id="noSession">
-                    <div class="no-session-icon">&#128640;</div>
-                    <p>Ucus kontrol listesini göruntulemek icin yeni bir oturum baslatin</p>
+
+        <div class="grid">
+            <div class="panel card">
+                <h2>Mission Timeline</h2>
+                <div id="timeline" class="empty">Aktif gorev yok.</div>
+            </div>
+
+            <div>
+                <div class="panel card">
+                    <h2>Telemetry + Auto Checklist</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="stepMission()">Siradaki Log Satirini Isle</button>
+                        <button class="btn btn-secondary" onclick="loadMissionReport()">Raporu Yenile</button>
+                    </div>
+                    <div class="telemetry-grid" id="telemetry-grid"></div>
+                    <div id="checklist-container" class="empty">Checklist bekleniyor.</div>
                 </div>
-                
-                <div id="checklistSections" style="display: none;">
-                    <div class="overall-progress" id="overallProgress">
-                        <div class="overall-progress-title">Genel Tamamlama</div>
-                        <div class="completion-rate" id="completionRate">0%</div>
-                        <div class="progress-bar" style="margin-top: 10px;">
-                            <div class="progress-fill" id="overallProgressFill" style="width: 0%"></div>
-                        </div>
+
+                <div class="two-col">
+                    <div class="panel card">
+                        <h3>Agent Inbox</h3>
+                        <div id="inbox" class="empty">Bekleyen aksiyon yok.</div>
+                    </div>
+                    <div class="panel card">
+                        <h3>Mission Report</h3>
+                        <div id="report" class="report">Rapor henuz uretilmedi.</div>
                     </div>
                 </div>
             </div>
-            
-            <div class="reference-panel">
-                <div class="reference-header">
-                    <span class="section-icon">&#9888;</span>
-                    <span class="reference-title">Acil Durum Prosedürleri</span>
-                </div>
-                <div id="emergencyReference">
-                </div>
+
+            <div class="panel card">
+                <h2>Event Log</h2>
+                <div id="event-log" class="empty">Event log bos.</div>
             </div>
         </div>
-        
-        <div class="history-panel" id="historyPanel" style="display: none;">
-            <h3 class="history-title">Gecmis Ucuslar</h3>
-            <div id="historyList"></div>
-        </div>
     </div>
-    
-    <div class="modal" id="historyModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalTitle">Ucus Detaylari</h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div id="modalContent"></div>
-        </div>
-    </div>
-    
+
     <script>
-        const API_BASE = '/api';
-        let currentSession = null;
-        let sessionStartTime = null;
-        let timerInterval = null;
-        let allItems = [];
-        
-        const sections = [
-            { id: 'ortam_kontrolu', name: 'Ortam Kontrolu', icon: '&#127781;' },
-            { id: 'ucus_oncesi', name: 'Ucus Oncesi', icon: '&#128736;' },
-            { id: 'ucus_sirasinda', name: 'Ucus Sirasinda', icon: '&#9992;' },
-            { id: 'ucus_sonrasi', name: 'Ucus Sonrasi', icon: '&#127937;' }
-        ];
-        
-        async function startSession() {
-            try {
-                const response = await fetch(`${API_BASE}/session/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-                currentSession = data.session;
-                sessionStartTime = new Date(data.session.start_time);
-                loadActiveSession();
-                startTimer();
-            } catch (error) {
-                console.error('Oturum baslatma hatasi:', error);
-                alert('Oturum baslatilamadi');
-            }
+        let currentMission = null;
+
+        async function api(url, options = {}) {
+            const response = await fetch(url, options);
+            return await response.json();
         }
-        
-        async function loadActiveSession() {
-            try {
-                const response = await fetch(`${API_BASE}/session/active`);
-                const data = await response.json();
-                
-                if (data.session) {
-                    currentSession = data.session;
-                    sessionStartTime = new Date(data.session.start_time);
-                }
-                
-                allItems = data.items || [];
-                renderChecklist(allItems);
-                document.getElementById('noSession').style.display = 'none';
-                document.getElementById('checklistSections').style.display = 'block';
-                updateSessionInfo();
-                updateOverallProgress();
-            } catch (error) {
-                console.error('Oturum yukleme hatasi:', error);
-            }
+
+        function statusClass(status) {
+            if (["completed", "done", "approved"].includes(status)) return "status-success";
+            if (["current", "pending"].includes(status)) return "status-warning";
+            if (["failed", "rejected"].includes(status)) return "status-danger";
+            return "status-muted";
         }
-        
-        function updateSessionInfo() {
-            const sessionInfo = document.getElementById('sessionInfo');
-            const btnGroup = document.getElementById('btnGroup');
-            
-            if (currentSession && currentSession.status === 'active') {
-                sessionInfo.innerHTML = `
-                    <p>Ucus Oturumu Aktif</p>
-                    <div class="session-timer" id="sessionTimer">00:00:00</div>
-                    <div class="btn-group">
-                        <button class="btn-danger" onclick="closeSession()">Ucusu Bitir</button>
-                        <button class="btn-secondary" onclick="showHistory()">Gecmis Ucuslar</button>
-                    </div>
-                `;
-                startTimer();
-            } else {
-                sessionInfo.innerHTML = '<p>Henuz aktif bir ucus oturumu bulunmuyor</p>';
-                btnGroup.innerHTML = `
-                    <button class="btn-primary" onclick="startSession()">Yeni Ucus Baslat</button>
-                    <button class="btn-secondary" onclick="showHistory()">Gecmis Ucuslar</button>
-                `;
-            }
+
+        function humanizeState(state) {
+            const map = {
+                preflight: "Preflight",
+                ready_for_takeoff: "Takeoff Bekliyor",
+                in_flight: "Ucus Sirasinda",
+                rth: "RTH",
+                landed: "Inis Tamamlandi",
+                postflight: "Postflight",
+                completed: "Tamamlandi"
+            };
+            return map[state] || state;
         }
-        
-        function startTimer() {
-            if (timerInterval) clearInterval(timerInterval);
-            
-            timerInterval = setInterval(() => {
-                const now = new Date();
-                const diff = now - sessionStartTime;
-                const hours = Math.floor(diff / 3600000);
-                const minutes = Math.floor((diff % 3600000) / 60000);
-                const seconds = Math.floor((diff % 60000) / 1000);
-                
-                const timer = document.getElementById('sessionTimer');
-                if (timer) {
-                    timer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                }
-            }, 1000);
-        }
-        
-        async function closeSession() {
-            if (!currentSession) return;
-            
-            if (!confirm('Ucus oturumunu kapatmak istediginizden emin misiniz?')) return;
-            
-            try {
-                await fetch(`${API_BASE}/session/close`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: currentSession.id })
-                });
-                
-                if (timerInterval) clearInterval(timerInterval);
-                currentSession = null;
-                allItems = [];
-                document.getElementById('noSession').style.display = 'block';
-                document.getElementById('checklistSections').style.display = 'none';
-                updateSessionInfo();
-                loadEmergencyReference();
-            } catch (error) {
-                console.error('Oturum kapatma hatasi:', error);
-                alert('Oturum kapatilamadi');
-            }
-        }
-        
-        function renderChecklist(items) {
-            const container = document.getElementById('checklistSections');
-            
-            // Keep the overall progress element
-            const overallProgress = document.getElementById('overallProgress');
-            container.innerHTML = '';
-            container.appendChild(overallProgress);
-            
-            sections.forEach(section => {
-                const sectionItems = items.filter(item => item.section === section.id);
-                if (sectionItems.length === 0) return;
-                
-                const completedCount = sectionItems.filter(item => item.completed).length;
-                const progress = Math.round((completedCount / sectionItems.length) * 100);
-                
-                const sectionDiv = document.createElement('div');
-                sectionDiv.className = 'checklist-section';
-                sectionDiv.innerHTML = `
-                    <div class="section-header">
-                        <span class="section-icon">${section.icon}</span>
-                        <span class="section-title">${section.name}</span>
-                    </div>
-                    <div class="progress-container">
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${progress}%"></div>
-                        </div>
-                        <div class="progress-text">${completedCount}/${sectionItems.length} tamamlandi (${progress}%)</div>
-                    </div>
-                    <div class="section-items"></div>
-                `;
-                
-                const itemsContainer = sectionDiv.querySelector('.section-items');
-                sectionItems.forEach(item => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = `checklist-item ${item.completed ? 'completed' : ''}`;
-                    itemDiv.onclick = () => toggleItem(item.id, !item.completed);
-                    itemDiv.innerHTML = `
-                        <div class="checkbox">
-                            <span class="checkmark">&#10003;</span>
-                        </div>
-                        <span class="item-text">${item.item_text}</span>
-                    `;
-                    itemsContainer.appendChild(itemDiv);
-                });
-                
-                container.appendChild(sectionDiv);
+
+        async function startMission() {
+            const missionName = document.getElementById("mission-name").value || "Demo Mission";
+            currentMission = await api("/api/missions", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({mission_name: missionName})
             });
+            renderMission(currentMission);
+            loadMissionReport();
         }
-        
-        function updateOverallProgress() {
-            const nonEmergencyItems = allItems.filter(item => !item.is_emergency);
-            const completedItems = nonEmergencyItems.filter(item => item.completed);
-            const totalItems = nonEmergencyItems.length;
-            const completedCount = completedItems.length;
-            const percentage = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
-            
-            const rateEl = document.getElementById('completionRate');
-            const fillEl = document.getElementById('overallProgressFill');
-            
-            if (rateEl) rateEl.textContent = `${percentage}%`;
-            if (fillEl) fillEl.style.width = `${percentage}%`;
-        }
-        
-        async function toggleItem(itemId, completed) {
-            if (!currentSession) return;
-            
-            try {
-                await fetch(`${API_BASE}/session/update`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: currentSession.id,
-                        template_item_id: itemId,
-                        completed: completed
-                    })
-                });
-                
-                // Update local state
-                const item = allItems.find(i => i.id === itemId);
-                if (item) item.completed = completed;
-                
-                renderChecklist(allItems);
-                updateOverallProgress();
-            } catch (error) {
-                console.error('Ogëe guncelleme hatasi:', error);
+
+        async function loadActiveMission() {
+            const mission = await api("/api/missions/active");
+            if (!mission) {
+                currentMission = null;
+                renderMission(null);
+                return;
             }
+            currentMission = mission;
+            renderMission(currentMission);
+            loadMissionReport();
         }
-        
-        async function loadEmergencyReference() {
-            try {
-                const response = await fetch(`${API_BASE}/emergency/reference`);
-                const items = await response.json();
-                
-                const container = document.getElementById('emergencyReference');
-                container.innerHTML = '';
-                
-                items.forEach((item, index) => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'reference-item';
-                    itemDiv.innerHTML = `
-                        <span class="reference-number">${index + 1}</span>
-                        ${item.item_text}
-                    `;
-                    container.appendChild(itemDiv);
-                });
-            } catch (error) {
-                console.error('Acil durum referansi yukleme hatasi:', error);
+
+        async function stepMission() {
+            if (!currentMission) return;
+            currentMission = await api(`/api/missions/${currentMission.mission_id}/step`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: "{}"
+            });
+            renderMission(currentMission);
+            loadMissionReport();
+        }
+
+        async function approveAction(action, approved) {
+            if (!currentMission) return;
+            currentMission = await api(`/api/missions/${currentMission.mission_id}/approve`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({action, approved})
+            });
+            renderMission(currentMission);
+            loadMissionReport();
+        }
+
+        async function answerQuestion(questionId, answer) {
+            if (!currentMission) return;
+            currentMission = await api(`/api/missions/${currentMission.mission_id}/answer`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({question_id: questionId, answer})
+            });
+            renderMission(currentMission);
+            loadMissionReport();
+        }
+
+        async function loadMissionReport() {
+            if (!currentMission) {
+                document.getElementById("report").textContent = "Rapor henuz uretilmedi.";
+                return;
             }
+            const report = await api(`/api/missions/${currentMission.mission_id}/report`);
+            const recommendations = (report.recommendations || []).length
+                ? report.recommendations.map(item => `- ${item}`).join("\\n")
+                : "- Ek onerisi yok.";
+            document.getElementById("report").textContent =
+                `Mission: ${report.mission_name}\\n` +
+                `State: ${humanizeState(report.state)}\\n` +
+                `Battery: ${report.telemetry_snapshot?.battery ?? "--"}\\n` +
+                `GPS: ${report.telemetry_snapshot?.gps ?? "--"}\\n` +
+                `Wind: ${report.telemetry_snapshot?.wind ?? "--"}\\n\\n` +
+                `Oneriler\\n${recommendations}`;
         }
-        
-        async function showHistory() {
-            const historyPanel = document.getElementById('historyPanel');
-            historyPanel.style.display = historyPanel.style.display === 'none' ? 'block' : 'none';
-            
-            if (historyPanel.style.display === 'block') {
-                try {
-                    const response = await fetch(`${API_BASE}/session/history`);
-                    const sessions = await response.json();
-                    
-                    const listContainer = document.getElementById('historyList');
-                    listContainer.innerHTML = '';
-                    
-                    if (sessions.length === 0) {
-                        listContainer.innerHTML = '<p style="color: #94a3b8;">Henuz kayitli ucus bulunmuyor</p>';
-                        return;
-                    }
-                    
-                    sessions.forEach(session => {
-                        const startDate = new Date(session.start_time);
-                        const endDate = session.end_time ? new Date(session.end_time) : null;
-                        const duration = endDate ? Math.round((endDate - startDate) / 60000) : '-';
-                        
-                        const itemDiv = document.createElement('div');
-                        itemDiv.className = 'history-item';
-                        itemDiv.onclick = () => showSessionDetail(session.id);
-                        itemDiv.innerHTML = `
+
+        function renderTimeline(mission) {
+            const container = document.getElementById("timeline");
+            if (!mission) {
+                container.className = "empty";
+                container.textContent = "Aktif gorev yok.";
+                return;
+            }
+            container.className = "";
+            container.innerHTML = mission.timeline.map(item => `
+                <div class="timeline-item ${item.status}">
+                    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+                        <strong>${humanizeState(item.state)}</strong>
+                        <span class="status-pill ${statusClass(item.status)}">${item.status}</span>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        function renderTelemetry(mission) {
+            const snapshot = mission?.telemetry_snapshot || {};
+            const grid = document.getElementById("telemetry-grid");
+            grid.innerHTML = [
+                ["Mission State", humanizeState(mission?.state || "preflight")],
+                ["Battery", snapshot.battery ?? "--"],
+                ["GPS", snapshot.gps ?? "--"],
+                ["Wind", snapshot.wind ?? "--"],
+                ["Mode", snapshot.mode ?? "--"],
+                ["Event", snapshot.event ?? "--"]
+            ].map(([label, value]) => `
+                <div class="metric">
+                    <div class="metric-label">${label}</div>
+                    <div class="metric-value">${value}</div>
+                </div>
+            `).join("");
+        }
+
+        function renderChecklist(mission) {
+            const container = document.getElementById("checklist-container");
+            if (!mission) {
+                container.className = "empty";
+                container.textContent = "Checklist bekleniyor.";
+                return;
+            }
+            container.className = "";
+            const sections = {};
+            mission.checklist.forEach(item => {
+                if (!sections[item.section]) sections[item.section] = [];
+                sections[item.section].push(item);
+            });
+            container.innerHTML = Object.entries(sections).map(([section, items]) => `
+                <div class="section-label">${section}</div>
+                ${items.map(item => `
+                    <div class="check-item">
+                        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
                             <div>
-                                <div class="history-date">${startDate.toLocaleDateString('tr-TR')} ${startDate.toLocaleTimeString('tr-TR')}</div>
-                                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">Sure: ${duration} dakika</div>
+                                <strong>${item.label}</strong>
+                                <div style="color:var(--muted);margin-top:6px;">${item.item_type} · ${item.source}</div>
                             </div>
-                            <span class="history-status ${session.status === 'completed' ? 'status-completed' : 'status-active'}">
-                                ${session.status === 'completed' ? 'Tamamlandi' : 'Aktif'}
-                            </span>
-                        `;
-                        listContainer.appendChild(itemDiv);
-                    });
-                } catch (error) {
-                    console.error('Gecmis yukleme hatasi:', error);
-                }
-            }
+                            <span class="status-pill ${statusClass(item.status)}">${item.status}</span>
+                        </div>
+                    </div>
+                `).join("")}
+            `).join("");
         }
-        
-        async function showSessionDetail(sessionId) {
-            try {
-                const response = await fetch(`${API_BASE}/session/${sessionId}`);
-                const data = await response.json();
-                
-                const modal = document.getElementById('historyModal');
-                const modalTitle = document.getElementById('modalTitle');
-                const modalContent = document.getElementById('modalContent');
-                
-                const startDate = new Date(data.session.start_time);
-                const endDate = data.session.end_time ? new Date(data.session.end_time) : null;
-                const duration = endDate ? Math.round((endDate - startDate) / 60000) : '-';
-                
-                modalTitle.textContent = `Ucus Detaylari - ${startDate.toLocaleDateString('tr-TR')}`;
-                
-                let html = `
-                    <p style="color: #94a3b8; margin-bottom: 20px;">
-                        Baslangic: ${startDate.toLocaleDateString('tr-TR')} ${startDate.toLocaleTimeString('tr-TR')}<br>
-                        Bitis: ${endDate ? endDate.toLocaleDateString('tr-TR') + ' ' + endDate.toLocaleTimeString('tr-TR') : 'Devam ediyor'}<br>
-                        Sure: ${duration} dakika
-                    </p>
-                `;
-                
-                sections.forEach(section => {
-                    const sectionItems = data.items.filter(item => item.section === section.id);
-                    if (sectionItems.length === 0) return;
-                    
-                    const completedCount = sectionItems.filter(item => item.completed).length;
-                    const progress = Math.round((completedCount / sectionItems.length) * 100);
-                    
-                    html += `
-                        <div style="margin-bottom: 20px;">
-                            <h4 style="color: #60a5fa; margin-bottom: 10px;">${section.name} (${progress}%)</h4>
-                    `;
-                    
-                    sectionItems.forEach(item => {
-                        const status = item.completed ? 'Tamamlandi' : 'Tamamlanmadi';
-                        const color = item.completed ? '#4ade80' : '#ef4444';
-                        html += `
-                            <div style="padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 4px;">
-                                <span style="color: ${color}; margin-right: 8px;">${item.completed ? '&#10003;' : '&#10007;'}</span>
-                                ${item.item_text}
-                            </div>
-                        `;
-                    });
-                    
-                    html += '</div>';
-                });
-                
-                modalContent.innerHTML = html;
-                modal.classList.add('active');
-            } catch (error) {
-                console.error('Oturum detay yukleme hatasi:', error);
+
+        function renderInbox(mission) {
+            const container = document.getElementById("inbox");
+            if (!mission) {
+                container.className = "empty";
+                container.textContent = "Bekleyen aksiyon yok.";
+                return;
             }
+
+            const chunks = [];
+            if (mission.pending_approval) {
+                chunks.push(`
+                    <div class="inbox-item">
+                        <strong>Onay Bekleniyor</strong>
+                        <div style="margin:8px 0 12px;">${mission.pending_approval.label || mission.pending_approval.action}</div>
+                        <div class="actions">
+                            <button class="btn btn-primary" onclick="approveAction('${mission.pending_approval.action}', true)">Onayla</button>
+                            <button class="btn btn-danger" onclick="approveAction('${mission.pending_approval.action}', false)">Reddet</button>
+                        </div>
+                    </div>
+                `);
+            }
+            (mission.pending_questions || []).forEach(question => {
+                chunks.push(`
+                    <div class="question-item">
+                        <strong>Operator Sorusu</strong>
+                        <div style="margin:8px 0 12px;">${question.label}</div>
+                        <div class="actions">
+                            <button class="btn btn-primary" onclick="answerQuestion('${question.question_id}', true)">Evet</button>
+                            <button class="btn btn-danger" onclick="answerQuestion('${question.question_id}', false)">Hayir</button>
+                        </div>
+                    </div>
+                `);
+            });
+
+            if (!chunks.length) {
+                container.className = "empty";
+                container.textContent = "Bekleyen soru veya onay yok.";
+                return;
+            }
+
+            container.className = "";
+            container.innerHTML = chunks.join("");
         }
-        
-        function closeModal() {
-            document.getElementById('historyModal').classList.remove('active');
+
+        function renderEventLog(mission) {
+            const container = document.getElementById("event-log");
+            if (!mission || !mission.event_log.length) {
+                container.className = "empty";
+                container.textContent = "Event log bos.";
+                return;
+            }
+            container.className = "";
+            container.innerHTML = [...mission.event_log].reverse().map(entry => `
+                <div class="event-item">
+                    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+                        <strong>${entry.event}</strong>
+                        <span class="status-pill ${statusClass(entry.level === 'critical' ? 'failed' : (entry.level === 'warn' ? 'pending' : 'completed'))}">${entry.level}</span>
+                    </div>
+                    <div style="margin-top:8px;color:var(--muted);">${entry.message || ""}</div>
+                </div>
+            `).join("");
         }
-        
-        // Close modal on outside click
-        document.getElementById('historyModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
-            }
-        });
-        
-        // Initialize
-        document.addEventListener('DOMContentLoaded', async () => {
-            loadEmergencyReference();
-            
-            try {
-                const response = await fetch(`${API_BASE}/session/active`);
-                const data = await response.json();
-                
-                if (data.session) {
-                    currentSession = data.session;
-                    sessionStartTime = new Date(data.session.start_time);
-                    loadActiveSession();
-                    updateSessionInfo();
-                }
-            } catch (error) {
-                console.error('Aktif oturum kontrolu hatasi:', error);
-            }
-        });
+
+        function renderMission(mission) {
+            renderTimeline(mission);
+            renderTelemetry(mission);
+            renderChecklist(mission);
+            renderInbox(mission);
+            renderEventLog(mission);
+        }
+
+        window.onload = loadActiveMission;
     </script>
 </body>
 </html>
-'''
+"""
 
-@app.route('/')
-def index():
-    """Serve the main application page."""
-    return render_template_string(HTML_TEMPLATE)
 
-if __name__ == '__main__':
-    init_db()
-    print("Drone Ucus Kontrol Listesi baslatiliyor...")
-    print("Tarayicida http://localhost:5000 adresini acin")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "5000"))
+    app.run(debug=True, host="0.0.0.0", port=port)
