@@ -3,7 +3,11 @@ __pycache__/
 .DS_Store
 .pytest_cache/
 .venv/
+.uv-cache/
 *.db
+*.aux
+*.out
+*.log
 *.docx
 ~$*.pptx
 ~$*.docx

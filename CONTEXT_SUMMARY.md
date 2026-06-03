@@ -54,16 +54,18 @@ crewai-todo-app/
 │   └── tools/
 │       ├── __init__.py
 │       └── custom_tool.py       # Placeholder, kullanilmiyor
-├── drone_checklist_app.py       # Uygulama (1161 satir, Flask + SQLAlchemy + inline JS)
+├── drone_checklist_app.py       # Uygulama (Flask + SQLAlchemy + inline JS)
 ├── PHASE1_DRONE_CHECKLIST_PLAN.md  # Faz 1 plan dokumani
-├── README.md                    # Kurulum ve kullanim
+├── README.md                    # Kurulum ve kullanim (zenginlestirilmis)
 ├── DEMO_ADIMLAR.md              # Adim adim demo talimatlari
-├── CREWAI sunum.md              # Marp sunum (27 slayt, PNG referansli)
-├── CREWAI sunum.html            # HTML sunum (27 slayt)
-├── CREWAI sunum.pptx            # PowerPoint sunum (27 slayt, 27 speaker notes)
-├── CREWAI sunum konusmaci notlari.md  # Ayri speaker notes dosyasi
-├── CREWAI sunum canva paste.txt # Canva icin TXT outline (27 slayt)
-├── assets/                      # 15 adet PNG gorsel
+├── CONTEXT_SUMMARY.md           # Kapsamli teknik ozet (bu dosya)
+├── sunum/                       # Sunum materyalleri
+│   ├── CREWAI sunum.md              # Marp sunum (27 slayt, PNG referansli)
+│   ├── CREWAI sunum.html            # HTML sunum (27 slayt)
+│   ├── CREWAI sunum.pptx            # PowerPoint sunum (27 slayt, 27 speaker notes)
+│   ├── CREWAI sunum konusmaci notlari.md  # Ayri speaker notes dosyasi
+│   ├── CREWAI sunum canva paste.txt # Canva icin TXT outline (27 slayt)
+│   └── assets/                      # 15 adet PNG gorsel
 ├── .env.example                 # OpenRouter API key sablonu
 ├── .env                         # (gitignore'da)
 ├── .gitignore
@@ -116,44 +118,54 @@ Not: Emergency items session olusturulurken ChecklistItemCompletion'a KOPYALANMA
 ## 5. API Endpoint'leri
 
 ### CRUD
-- `POST /api/sessions/start` - Yeni ucus olusturur
-- `GET /api/sessions/active` - Aktif oturumu getirir
+- `POST /api/sessions` - Yeni ucus baslatir (body: drone_name)
+- `GET /api/sessions/active` - Aktif oturumu getirir (items ile birlikte)
 - `GET /api/sessions/<id>` - Spesifik oturum detayi
-- `PUT /api/sessions/<session_id>/items/<template_id>` - Madde tamamlama durumu gunceller
+- `PUT /api/sessions/<id>/items/<item_id>` - Madde tamamlama (body: completed)
 - `POST /api/sessions/<id>/close` - Oturumu kapatir
 - `GET /api/sessions/history` - Gecmis oturumlar listesi
-- `GET /api/emergency/reference` - Acil durum referans maddeleri
+- `GET /api/reference/emergency` - Acil durum referans maddeleri
+- `GET /api/template` - Tum sablon maddeleri
 
-### Agent Endpoint'leri (In-App Agentic)
-- `GET /api/sessions/<id>/assess-risk` - Risk Degerlendirmesi Agent'i
-- `GET /api/sessions/<id>/advisor` - Checklist Danismani Agent'i
-- `GET /api/sessions/<id>/report` - Rapor Uretici Agent'i
+### Agent Endpoint'leri (DroneChecklistAgent, 3 yetenek)
+- `GET /api/sessions/<id>/assess-risk` - Risk Degerlendirmesi
+- `GET /api/sessions/<id>/advisor` - Checklist Danismani
+- `GET /api/sessions/<id>/report` - Rapor Uretici
+- `GET /api/sessions/<id>/agent-trace` - Agent ic surec loglari (Agent Log paneli)
 
 ---
 
-## 6. Agent Siniflari (In-App Agentic Akis)
+## 6. DroneChecklistAgent (In-App Agentic)
 
-### RiskAssessmentAgent
-- Checklist tamamlanma durumunu analiz eder
-- Ortam kontrolu yuzdesi hesaplar
-- Kritik madde eksikliklerini belirler (HIGH_RISK_ITEMS listesi)
-- Karar verir: GO / NO-GO / WARNING
-- JSON response dondurur
+`drone_checklist_app.py` icinde tek bir `DroneChecklistAgent` sinifi, 3 bagimsiz method:
 
-### ChecklistAdvisorAgent
-- Faz bazli onceliklendirme yapar (Ortam Kontrolu > Ucus Oncesi > Ucus Sirasinda > Ucus Sonrasi)
-- Ilk eksik faz tespit eder
-- Sonraki 5 adimi onerir
-- Bloklar listesi olusturur
-- JSON response dondurur
+### assess_risk()
+- Tüm maddeleri analiz eder
+- Kritik fazlar (Ortam Kontrolu, Ucus Oncesi) tamamlanmadiysa → NO-GO
+- Genel tamamlanma <%80 ise → WARNING
+- Her sey tamam → GO
+- Donus: karar, faz bazli ilerleme, uyarilar, eksik kritik maddeler
 
-### FlightReportAgent
-- Tamamlanma yuzdesi hesaplar
-- Faz bazli istatistikler olusturur
-- Uyarilar listesi (eksik maddeler)
-- Oneriler listesi (%80 alti uyari, eksik ortam kontrolu uyari)
-- Sure hesaplamasi
-- JSON response dondurur
+### get_advice()
+- Ilk tamamlanmamis fazi tespit eder (mevcut faz)
+- O fazdaki ilk 5 tamamlanmamis maddeyi sonraki adim olarak onerir
+- Blokajlari gosterir
+- Donus: mevcut faz, sonraki adimlar, blokajlar, faz ilerlemesi
+
+### generate_report()
+- Ucus tamamlandiktan sonra calisir
+- Sure hesaplar (start_time - end_time farki)
+- Faz bazli tamamlanma yuzdesi, eksik maddeler listesi
+- Uyarilar ve iyilestirme onerileri
+
+Faz 2'de bu 3 method ayri CrewAI agent'larina bolunecek sekilde bagimsiz tasarlandi.
+
+### Agent Trace Sistemi
+Her 3 methodun ic adimi trace edilir:
+- **TraceEntry**: timestamp, action, thought, function, detail, result
+- Action tipleri: `Veri Analizi`, `Faz Analizi`, `Kritik Degerlendirme`, `Karar Verme`, `Durum Tespiti`, `Faz Belirleme`, `Adim Plani`, `Rapor Hazirlama`, `Istatistik`, `Oneri Hazirlama`, `Rapor Tamamlama`, `Hata`
+- Trace bellek icinde `OrderedDict` (session_id -> list) ile saklanir, session reset'te temizlenir
+- UI: 4. nav-tab "Agent Log" aktif ucus varken gorunur, timeline goruntuleyici, detay toggle butonu
 
 ---
 
@@ -201,7 +213,7 @@ Turkce arayuz, dark tema, mobil uyumlu.
 
 ## 9. Sunum Materyalleri
 
-Dosyalar:
+Dosyalar (`sunum/` altinda):
 - `CREWAI sunum.md` - Marp format, 27 slayt, PNG gorsel referansli
 - `CREWAI sunum.html` - Browser'da goruntulenir, 27 slayt
 - `CREWAI sunum.pptx` - PowerPoint, 27 slayt, 27 speaker notes, PNG gorsel gomulu

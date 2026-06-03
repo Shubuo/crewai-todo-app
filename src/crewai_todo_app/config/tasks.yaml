@@ -1,36 +1,49 @@
-generate_drone_checklist_app_task:
+plan_operations_task:
   description: >
-    Build the Phase 1 single-agent baseline for {project_name}. Generate a
-    complete Python Flask application and save it as {output_file}. The output
-    must be a single file containing the backend plus the HTML, CSS, and
-    JavaScript needed for a simple Turkish UI.
-
-    Requirements:
-    - Use Flask for the web server.
-    - Use SQLite for persistence.
-    - Model the product as a reusable checklist template plus per-flight sessions.
-    - Each new flight must create a fresh checklist instance based on the same
-      template items.
-    - Keep the UI intentionally simple and single-page.
-    - The UI language must be Turkish.
-    - Include these operational sections:
-      - Ortam Kontrolu
-      - Ucus Oncesi
-      - Ucus Sirasinda
-      - Acil Durum Prosedurleri
-      - Ucus Sonrasi
-    - Treat Acil Durum Prosedurleri as a reference panel, not as normal
-      checkboxes that must be completed during every flight.
-    - Persist historical flight sessions so past flights can be reviewed.
-    - Include routes or APIs for starting a flight session, reading the active
-      session, updating checklist item completion, closing a session, listing
-      flight history, and reading emergency reference items.
-    - Seed the database with sensible default drone checklist items for each
-      section.
-    - Keep the implementation self-contained and runnable with `python {output_file}`.
-    - Prefer clear, maintainable code over unnecessary abstractions.
-    - Return only raw Python source code with no markdown fences and no extra commentary.
+    Analyze the {project_name} requirements and outline the core features needed
+    for a drone checklist application. Define the database schema (SQLite) and
+    API endpoints required. Return a structured technical specification document.
   expected_output: >
-    A complete runnable Python source file for a single-file Flask drone flight
-    checklist app with SQLite persistence, ready to be written directly to {output_file}.
+    A detailed technical specification document including feature list, schema,
+    and API endpoints.
+  agent: operations_planner
+
+design_safety_task:
+  description: >
+    Based on the technical specification, define the specific checklist items for
+    Ortam Kontrolu, Ucus Oncesi, Ucus Sirasinda, Acil Durum, and Ucus Sonrasi.
+    Provide these items in a structured Python list format to be seeded into the database.
+  expected_output: >
+    A Python-compatible list of tuples representing the default checklist items.
+  agent: safety_designer
+
+design_ui_task:
+  description: >
+    Create a detailed UI layout specification. Describe the HTML structure and CSS
+    classes needed for a dark-mode industrial drone control dashboard. Include
+    a FIPA Simulation visual panel specification.
+  expected_output: >
+    A UI design specification document with layout structures and CSS styling guidelines.
+  agent: ui_designer
+
+develop_application_task:
+  description: >
+    Using the specifications from the planner, safety designer, and UI designer,
+    write the complete, runnable Python Flask application for {project_name}.
+    - Use Flask for the web server and SQLite for persistence.
+    - Write ALL the HTML/CSS/JS inside the python file using `render_template_string`.
+    - Implement the endpoints and the FIPA Simulation UI.
+    - Output MUST be the raw Python code ONLY. NO markdown fences. NO text.
+  expected_output: >
+    Raw, valid Python source code ready to be executed, saved to {output_file}.
   agent: full_stack_developer
+
+qa_review_task:
+  description: >
+    Review the final generated code from the full_stack_developer. Check for
+    Flask route consistency, valid HTML, and confirm that there are no markdown
+    fences in the final output. If it looks correct, return the exact raw Python
+    code. If there are fences, remove them.
+  expected_output: >
+    Clean, raw, runnable Python code without any markdown formatting.
+  agent: qa_tester
