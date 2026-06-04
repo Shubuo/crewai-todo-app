@@ -11,6 +11,7 @@ from mission_runtime.checklist_rules import (
 )
 from mission_runtime.log_reader import TelemetryLogReader
 from mission_runtime.models import ChecklistItem, MissionApproval, MissionQuestion
+from mission_runtime.sample_log_generator import scenario_label, scenario_route
 
 
 INITIAL_COORDINATES = {"lat": 38.42, "lon": 27.14, "heading": 0.0, "altitude": 0.0}
@@ -22,12 +23,19 @@ def utc_now() -> str:
 
 class MissionSupervisor:
     @classmethod
-    def create(cls, mission_name: str, log_path: Path) -> "MissionSupervisor":
-        return cls(mission_name, log_path)
+    def create(
+        cls,
+        mission_name: str,
+        log_path: Path,
+        scenario_id: str = "survey_grid",
+    ) -> "MissionSupervisor":
+        return cls(mission_name, log_path, scenario_id=scenario_id)
 
-    def __init__(self, mission_name: str, log_path: Path):
+    def __init__(self, mission_name: str, log_path: Path, scenario_id: str = "survey_grid"):
         self.mission_id = uuid4().hex[:8]
         self.mission_name = mission_name
+        self.scenario_id = scenario_id
+        self.scenario_label = scenario_label(scenario_id)
         self.log_path = Path(log_path)
         self.reader = TelemetryLogReader(self.log_path)
         self.state = "preflight"
@@ -35,6 +43,12 @@ class MissionSupervisor:
         self.ended_at: str | None = None
         self.replay_status = "ready"
         self.map_position = dict(INITIAL_COORDINATES)
+        self.planned_route = scenario_route(scenario_id)
+        self.trail: list[dict] = []
+        self.last_emergency: dict | None = None
+        self.proactive_messages: list[dict] = []
+        self.fipa_log: list[dict] = []
+        self._proactive_flags: set[str] = set()
         self.checklist_items: list[ChecklistItem] = default_checklist_items()
         self.questions: list[MissionQuestion] = default_questions()
         self.approvals: list[dict] = []
@@ -46,6 +60,24 @@ class MissionSupervisor:
             "mission_created",
             f"{mission_name} gorevi hazirlandi.",
             result="Preflight baslatildi",
+        )
+        self._fipa(
+            "Mission Supervisor",
+            "Telemetry Analyst",
+            "REQUEST",
+            "Preflight telemetrisi, rota ve link sagligi hazirlansin.",
+        )
+        self._fipa(
+            "Mission Supervisor",
+            "Safety Officer",
+            "REQUEST",
+            "Checklist tamamlandiginda kalkis uygunlugunu degerlendir.",
+        )
+        self._fipa(
+            "Mission Supervisor",
+            "Meteorology Agent",
+            "REQUEST",
+            "Ruzgar trendini gorev boyunca izle ve esik oncesi uyar.",
         )
 
     def _find_item(self, item_id: str) -> ChecklistItem | None:
@@ -81,6 +113,49 @@ class MissionSupervisor:
             }
         )
 
+    def _fipa(
+        self,
+        sender: str,
+        receiver: str,
+        performative: str,
+        content: str,
+        *,
+        ts: str | None = None,
+    ) -> None:
+        self.fipa_log.append(
+            {
+                "timestamp": ts or utc_now(),
+                "sender": sender,
+                "receiver": receiver,
+                "performative": performative,
+                "content": content,
+            }
+        )
+
+    def _add_proactive(
+        self,
+        key: str,
+        agent_role: str,
+        title: str,
+        message: str,
+        *,
+        severity: str = "info",
+        actions: list[str] | None = None,
+    ) -> None:
+        if key in self._proactive_flags:
+            return
+        self._proactive_flags.add(key)
+        self.proactive_messages.append(
+            {
+                "timestamp": utc_now(),
+                "agent_role": agent_role,
+                "title": title,
+                "message": message,
+                "severity": severity,
+                "actions": actions or [],
+            }
+        )
+
     def _all_questions_answered(self) -> bool:
         return all(question.status == "answered" and question.answer for question in self.questions)
 
@@ -97,6 +172,7 @@ class MissionSupervisor:
             self.map_position["heading"] = float(event.heading)
         if event.altitude is not None:
             self.map_position["altitude"] = float(event.altitude)
+        self.trail.append(dict(self.map_position))
 
     def _risk_summary(self) -> dict:
         wind = self.telemetry_snapshot.get("wind")
@@ -112,6 +188,11 @@ class MissionSupervisor:
             notes.append("Batarya gorev sonuna yaklasiyor.")
         if self.pending_approval:
             notes.append(f"Bekleyen onay: {self.pending_approval['action']}")
+        if self.last_emergency:
+            status = "WARNING" if status == "GO" else status
+            notes.append(
+                f"Acil durum: {self.last_emergency['emergency_type']} -> {self.last_emergency['action']}"
+            )
         if not notes:
             notes.append("Gorev parametreleri dengeli gorunuyor.")
 
@@ -140,6 +221,90 @@ class MissionSupervisor:
             "Ucus sonu kontrol ve rapor tamamladi.",
             result=f"%{self._history_summary()['completion_percentage']} checklist tamamlama",
         )
+        self._fipa(
+            "Mission Supervisor",
+            "Report Writer",
+            "REQUEST",
+            "Ucus sonu bulgularini rapora donustur.",
+        )
+        self._fipa(
+            "Report Writer",
+            "Mission Supervisor",
+            "INFORM",
+            "Mission raporu, risk notlari ve checklist sonucu hazirlandi.",
+        )
+
+    def _run_proactive_checks(self, ts: str | None = None) -> None:
+        wind = self.telemetry_snapshot.get("wind")
+        battery = self.telemetry_snapshot.get("battery")
+        gps = self.telemetry_snapshot.get("gps")
+
+        if self.state == "ready_for_takeoff":
+            self._add_proactive(
+                "takeoff-brief",
+                "Safety Officer",
+                "Takeoff degerlendirmesi",
+                "Checklist tamamlandi. Kalkis onayi verilirken ruzgar ve GPS trendi birlikte kontrol edilmeli.",
+                severity="info",
+                actions=["Kalkisi onayla", "1 ek tur telemetry oku"],
+            )
+            self._fipa(
+                "Safety Officer",
+                "Mission Supervisor",
+                "PROPOSE",
+                "Takeoff oncesi son ruzgar/GPS degeri kontrol edilerek GO karari verilebilir.",
+                ts=ts,
+            )
+
+        if self.state in {"in_flight", "rth"}:
+            if wind is not None and wind >= 8:
+                self._add_proactive(
+                    "wind-early-warning",
+                    "Meteorology Agent",
+                    "Ruzgar trendi yukseliyor",
+                    "Ruzgar limit yakini. Rota kisaltma veya erken inis icin hazirlik oneriliyor.",
+                    severity="warning",
+                    actions=["Rota kisalt", "RTH hazirla"],
+                )
+                self._fipa(
+                    "Meteorology Agent",
+                    "Mission Supervisor",
+                    "PROPOSE",
+                    "Ruzgar artiyor; rota kisaltma veya erken inis secenekleri operatora sunulmali.",
+                    ts=ts,
+                )
+            if battery is not None and battery <= 92:
+                self._add_proactive(
+                    "battery-buffer",
+                    "Safety Officer",
+                    "Batarya rezervi izleniyor",
+                    "Batarya dusus hizi mevcut gorev profilinde erken donus penceresini etkileyebilir.",
+                    severity="warning",
+                    actions=["RTH rezervi hesapla", "Gorevi kisalt"],
+                )
+                self._fipa(
+                    "Safety Officer",
+                    "Mission Supervisor",
+                    "PROPOSE",
+                    "Batarya trendi nedeniyle mission suresi kisaltilabilir veya rezerv korunabilir.",
+                    ts=ts,
+                )
+            if gps is not None and gps <= 15:
+                self._add_proactive(
+                    "gps-watch",
+                    "Telemetry Analyst",
+                    "GPS kalite takibi",
+                    "Uydu sayisi dusuyor. Rota hassasiyeti azalirsa hold veya RTH secenekleri hazir tutulmali.",
+                    severity="warning",
+                    actions=["Hold hazirla", "RTH hazirla"],
+                )
+                self._fipa(
+                    "Telemetry Analyst",
+                    "Mission Supervisor",
+                    "INFORM",
+                    "GPS kalitesi azalma egiliminde; konum toleransi dusurulmeli.",
+                    ts=ts,
+                )
 
     def _ensure_takeoff_approval(self) -> None:
         if (
@@ -158,6 +323,13 @@ class MissionSupervisor:
                 "Preflight tamamlandi, kalkis onayi istendi.",
                 result="Takeoff approval requested",
             )
+            self._fipa(
+                "Mission Supervisor",
+                "Safety Officer",
+                "REQUEST",
+                "Preflight tamamlandi, kalkis uygunlugunu degerlendir.",
+            )
+            self._run_proactive_checks()
 
     def answer_question(self, question_id: str, answer: bool) -> None:
         question = self._find_question(question_id)
@@ -177,6 +349,12 @@ class MissionSupervisor:
             result="Evet" if answer else "Hayir",
             level="info" if answer else "warn",
         )
+        self._fipa(
+            "Mission Supervisor",
+            "Safety Officer",
+            "INFORM",
+            f"Operator kontrol sonucu: {question.label} -> {'evet' if answer else 'hayir'}",
+        )
         self._ensure_takeoff_approval()
 
     def approve_action(self, action: str, approved: bool) -> None:
@@ -187,6 +365,12 @@ class MissionSupervisor:
             f"{action} aksiyonu operator tarafindan degerlendirildi.",
             result=status.upper(),
             level="info" if approved else "warn",
+        )
+        self._fipa(
+            "Safety Officer",
+            "Mission Supervisor",
+            "INFORM",
+            f"Operator {action} icin {status} karari verdi.",
         )
         if self.pending_approval and self.pending_approval.get("action") == action:
             self.pending_approval["status"] = status
@@ -206,6 +390,51 @@ class MissionSupervisor:
             self.replay_status = "stopped"
             self.ended_at = utc_now()
             self._finalize_completed_mission()
+
+    def trigger_emergency(self, emergency_type: str) -> None:
+        mapping = {
+            "low_battery": ("Safety Officer", "rth_now", "rth", "emergency_rth"),
+            "high_wind": ("Meteorology Agent", "land_now", "landed", "awaiting_landing_approval"),
+            "gps_loss": ("Telemetry Analyst", "hold_then_rth", "rth", "emergency_hold"),
+            "motor_fault": ("Safety Officer", "abort_and_land", "landed", "awaiting_landing_approval"),
+        }
+        agent_role, action, state, replay_status = mapping.get(
+            emergency_type,
+            ("Mission Supervisor", "hold_position", self.state, self.replay_status),
+        )
+        self.last_emergency = {
+            "emergency_type": emergency_type,
+            "agent_role": agent_role,
+            "action": action,
+            "timestamp": utc_now(),
+        }
+        self.state = state
+        self.replay_status = replay_status
+        if state == "landed":
+            approval = MissionApproval("landing", "Acil inis sonrasi operator onayi")
+            self.pending_approval = approval.to_dict()
+            self.approvals.append(self.pending_approval)
+        else:
+            self.pending_approval = None
+        self._log(
+            agent_role,
+            "emergency_action",
+            f"{emergency_type} tetiklendi.",
+            result=action,
+            level="warn",
+        )
+        self._fipa(
+            "Mission Supervisor",
+            agent_role,
+            "REQUEST",
+            f"{emergency_type} icin acil karar uret.",
+        )
+        self._fipa(
+            agent_role,
+            "Mission Supervisor",
+            "INFORM",
+            f"Acil durum karari: {action}. Replay durumu {replay_status} olarak guncellendi.",
+        )
 
     def process_next_event(self):
         if self.state in {"ready_for_takeoff", "landed"} and self.pending_approval is not None:
@@ -241,6 +470,13 @@ class MissionSupervisor:
                 result=f"Mode={event.mode or '--'}",
                 ts=event.ts,
             )
+            self._fipa(
+                "Telemetry Analyst",
+                "Mission Supervisor",
+                "INFORM",
+                f"{event.event}: gps={event.gps or '--'}, wind={event.wind or '--'}, mode={event.mode or '--'}",
+                ts=event.ts,
+            )
         elif event.event == "takeoff":
             self.state = "in_flight"
             self.replay_status = "flying"
@@ -251,12 +487,26 @@ class MissionSupervisor:
                 result=f"Alt={event.altitude or 0}m",
                 ts=event.ts,
             )
+            self._fipa(
+                "Mission Supervisor",
+                "Telemetry Analyst",
+                "REQUEST",
+                "Ucus sirasinda trend sapmalarini erken bildir.",
+                ts=event.ts,
+            )
         elif event.event.startswith("waypoint_"):
             self._log(
                 "Telemetry Analyst",
                 event.event,
                 f"Drone rota noktasina ulasti ({self.map_position['lat']:.4f}, {self.map_position['lon']:.4f}).",
                 result=f"Battery={event.battery or '--'}%",
+                ts=event.ts,
+            )
+            self._fipa(
+                "Telemetry Analyst",
+                "Mission Supervisor",
+                "INFORM",
+                f"Waypoint gecildi; battery={event.battery or '--'}%, gps={event.gps or '--'}",
                 ts=event.ts,
             )
         elif event.event == "wind_watch":
@@ -266,6 +516,29 @@ class MissionSupervisor:
                 f"Ruzgar {event.wind or '--'} m/s seviyesine cikti.",
                 result="Yol devam ediyor, limit izleniyor",
                 level="warn",
+                ts=event.ts,
+            )
+            self._fipa(
+                "Meteorology Agent",
+                "Safety Officer",
+                "INFORM",
+                f"Ruzgar {event.wind or '--'} m/s seviyesine cikti; sinira yaklasiliyor.",
+                ts=event.ts,
+            )
+        elif event.event == "high_wind":
+            self._log(
+                "Meteorology Agent",
+                "warning",
+                f"Yuksek ruzgar tespit edildi: {event.wind or '--'} m/s.",
+                result="Erken inis degerlendiriliyor",
+                level="warn",
+                ts=event.ts,
+            )
+            self._fipa(
+                "Meteorology Agent",
+                "Mission Supervisor",
+                "PROPOSE",
+                "Yuksek ruzgar nedeniyle erken inis veya gorev kisaltma uygulanmali.",
                 ts=event.ts,
             )
         elif event.event == "landing":
@@ -279,6 +552,13 @@ class MissionSupervisor:
                 "landing_hold",
                 "Drone inis noktasina ulasti ve operator onayi bekliyor.",
                 result="Landing approval requested",
+                ts=event.ts,
+            )
+            self._fipa(
+                "Mission Supervisor",
+                "Safety Officer",
+                "REQUEST",
+                "Inis sonrasi son kontrol ve kapatma onayi gereksinimini bildir.",
                 ts=event.ts,
             )
         else:
@@ -296,6 +576,7 @@ class MissionSupervisor:
                 weather_item.status = "completed"
 
         self._ensure_takeoff_approval()
+        self._run_proactive_checks(event.ts)
         return event
 
     def pending_questions(self) -> list[dict]:
@@ -305,20 +586,32 @@ class MissionSupervisor:
         return {
             "mission_id": self.mission_id,
             "mission_name": self.mission_name,
+            "scenario_id": self.scenario_id,
+            "scenario_label": self.scenario_label,
             "state": self.state,
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "replay_status": self.replay_status,
             "map_position": dict(self.map_position),
+            "planned_route": list(self.planned_route),
+            "trail": list(self.trail),
+            "last_emergency": self.last_emergency,
             "telemetry_snapshot": self.telemetry_snapshot,
+            "compact_telemetry": {
+                "battery": self.telemetry_snapshot.get("battery"),
+                "gps": self.telemetry_snapshot.get("gps"),
+                "wind": self.telemetry_snapshot.get("wind"),
+                "mode": self.telemetry_snapshot.get("mode"),
+            },
             "pending_approval": self.pending_approval,
             "pending_questions": self.pending_questions(),
             "approvals": list(self.approvals),
             "questions": [question.to_dict() for question in self.questions],
             "checklist": [item.to_dict() for item in self.checklist_items],
             "event_log": list(self.event_log),
+            "proactive_messages": list(self.proactive_messages),
+            "fipa_log": list(self.fipa_log),
             "history_summary": self._history_summary(),
             "risk_summary": self._risk_summary(),
             "log_path": str(self.log_path),
         }
-

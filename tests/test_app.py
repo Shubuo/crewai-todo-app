@@ -19,7 +19,10 @@ class FlaskMissionAppTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_create_mission_returns_runtime_payload(self):
-        response = self.client.post("/api/missions", json={"mission_name": "Demo Mission"})
+        response = self.client.post(
+            "/api/missions",
+            json={"mission_name": "Demo Mission", "scenario_id": "perimeter_sweep"},
+        )
         payload = response.get_json()
 
         self.assertEqual(response.status_code, 200)
@@ -27,9 +30,13 @@ class FlaskMissionAppTests(unittest.TestCase):
         self.assertEqual(payload["state"], "preflight")
         self.assertIn("replay_status", payload)
         self.assertIn("map_position", payload)
+        self.assertIn("fipa_log", payload)
+        self.assertIn("proactive_messages", payload)
+        self.assertEqual(payload["scenario_id"], "perimeter_sweep")
+        self.assertTrue(payload["planned_route"])
 
     def test_history_endpoint_returns_completed_mission(self):
-        mission = self.store.create("History Mission")
+        mission = self.store.create("History Mission", scenario_id="windy_inspection")
         for question_id in ("propeller_check", "area_check", "camera_check"):
             mission.answer_question(question_id, True)
         for _ in range(4):
@@ -46,6 +53,44 @@ class FlaskMissionAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(payload), 1)
         self.assertEqual(payload[0]["state"], "completed")
+        self.assertEqual(payload[0]["scenario_id"], "windy_inspection")
+
+    def test_emergency_endpoint_triggers_runtime_action(self):
+        mission = self.store.create("Emergency Mission")
+        for question_id in ("propeller_check", "area_check", "camera_check"):
+            mission.answer_question(question_id, True)
+        for _ in range(4):
+            mission.process_next_event()
+        mission.approve_action("takeoff", True)
+        mission.process_next_event()
+        self.store.save(mission)
+
+        response = self.client.post(
+            f"/api/missions/{mission.mission_id}/emergency",
+            json={"emergency_type": "high_wind"},
+        )
+        payload = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["last_emergency"]["emergency_type"], "high_wind")
+        self.assertIn(payload["last_emergency"]["action"], {"land_now", "hold_then_rth", "rth_now"})
+
+    def test_delete_completed_history_mission(self):
+        mission = self.store.create("Delete Mission")
+        for question_id in ("propeller_check", "area_check", "camera_check"):
+            mission.answer_question(question_id, True)
+        for _ in range(4):
+            mission.process_next_event()
+        mission.approve_action("takeoff", True)
+        while mission.pending_approval is None:
+            mission.process_next_event()
+        mission.approve_action("landing", True)
+        self.store.save(mission)
+
+        response = self.client.delete(f"/api/missions/{mission.mission_id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get("/api/missions/history").get_json(), [])
 
     @patch("drone_checklist_app.urllib.request.urlopen")
     def test_weather_advice_endpoint_returns_decision(self, mock_urlopen):
@@ -75,6 +120,10 @@ class FlaskMissionAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Ana Komuta Ekrani", html)
         self.assertIn("FIPA Ajan Simulasyonu", html)
+        self.assertIn("Survey Grid", html)
+        self.assertIn("Acil Durum", html)
+        self.assertIn("Mission Supervisor", html)
+        self.assertIn("Telemetry Analyst", html)
         self.assertNotIn("Checklist artik agent destekli ilerliyor", html)
 
 

@@ -27,6 +27,20 @@ class SampleLogGeneratorTests(unittest.TestCase):
             self.assertIsNotNone(events[0].lat)
             self.assertIsNotNone(events[-1].heading)
 
+    def test_supports_multiple_scenarios(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            survey_path = Path(tmp) / "survey.log"
+            windy_path = Path(tmp) / "windy.log"
+            write_sample_telemetry_log(survey_path, scenario_id="survey_grid")
+            write_sample_telemetry_log(windy_path, scenario_id="windy_inspection")
+
+            survey_lines = survey_path.read_text(encoding="utf-8").splitlines()
+            windy_lines = windy_path.read_text(encoding="utf-8").splitlines()
+
+            self.assertNotEqual(survey_lines, windy_lines)
+            self.assertGreater(len(survey_lines), 9)
+            self.assertTrue(any("high_wind" in line or "wind_watch" in line for line in windy_lines))
+
 
 if __name__ == "__main__":
     unittest.main()

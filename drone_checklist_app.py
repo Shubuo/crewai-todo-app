@@ -86,7 +86,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     def create_mission():
         payload = request.get_json(silent=True) or {}
         mission_name = payload.get("mission_name", "Demo Mission")
-        mission = mission_store().create(mission_name)
+        scenario_id = payload.get("scenario_id", "survey_grid")
+        mission = mission_store().create(mission_name, scenario_id=scenario_id)
         return jsonify(serialize_mission(mission))
 
     @app.route("/api/missions/active", methods=["GET"])
@@ -130,6 +131,16 @@ def create_app(test_config: dict | None = None) -> Flask:
         mission_store().save(mission)
         return jsonify(serialize_mission(mission))
 
+    @app.route("/api/missions/<mission_id>/emergency", methods=["POST"])
+    def trigger_mission_emergency(mission_id: str):
+        mission = mission_store().get(mission_id)
+        if mission is None:
+            return jsonify({"error": "Mission not found"}), 404
+        payload = request.get_json(force=True) or {}
+        mission.trigger_emergency(payload.get("emergency_type", ""))
+        mission_store().save(mission)
+        return jsonify(serialize_mission(mission))
+
     @app.route("/api/missions/<mission_id>/answer", methods=["POST"])
     def answer_mission_question(mission_id: str):
         mission = mission_store().get(mission_id)
@@ -157,6 +168,13 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify(detail.get("report", {}))
         mission_store().save(mission)
         return jsonify(build_mission_report(mission))
+
+    @app.route("/api/missions/<mission_id>", methods=["DELETE"])
+    def delete_mission(mission_id: str):
+        deleted = mission_store().delete(mission_id)
+        if not deleted:
+            return jsonify({"error": "Mission could not be deleted"}), 409
+        return jsonify({"deleted": True, "mission_id": mission_id})
 
     @app.route("/api/weather_advice", methods=["POST"])
     def weather_advice():
@@ -298,7 +316,7 @@ HTML_TEMPLATE = """
             align-items: center;
             margin-bottom: 18px;
         }
-        .start-panel input {
+        .start-panel input, .start-panel select {
             flex: 1;
             min-width: 220px;
             border-radius: 16px;
@@ -432,6 +450,36 @@ HTML_TEMPLATE = """
             margin-top: 4px;
             font-size: 0.84rem;
         }
+        .tiny {
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+        .mini-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .mini-grid .compact-card {
+            padding: 10px 12px;
+            margin-bottom: 0;
+        }
+        .inline-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .inline-actions .btn {
+            padding: 9px 12px;
+            font-size: 0.86rem;
+        }
+        .history-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
         .history-card {
             padding: 16px;
             margin-bottom: 12px;
@@ -517,6 +565,11 @@ HTML_TEMPLATE = """
 
             <div class="card start-panel">
                 <input id="mission-name" value="Demo Mission" placeholder="Mission name">
+                <select id="scenario-id">
+                    <option value="survey_grid">Survey Grid</option>
+                    <option value="perimeter_sweep">Perimeter Sweep</option>
+                    <option value="windy_inspection">Windy Inspection</option>
+                </select>
                 <button class="btn btn-primary" onclick="startMission()">Gorevi Baslat</button>
                 <button class="btn btn-secondary" onclick="loadActiveMission()">Aktif Gorevi Yenile</button>
                 <button class="btn btn-secondary" onclick="primePreflight()">Preflight Telemetrisi Yukle</button>
@@ -525,12 +578,23 @@ HTML_TEMPLATE = """
             <div class="layout">
                 <div>
                     <div class="card">
-                        <h2 class="section-title">Mission Timeline</h2>
-                        <div id="timeline" class="empty">Aktif gorev yok.</div>
-                    </div>
-                    <div class="card">
                         <h2 class="section-title">Agent Inbox</h2>
                         <div id="inbox" class="empty">Bekleyen aksiyon yok.</div>
+                    </div>
+                    <div class="card">
+                        <h2 class="section-title">Acil Durum</h2>
+                        <div class="tiny">Preset tetikle, ilgili agent karari aninda uygulasin.</div>
+                        <div class="inline-actions">
+                            <button class="btn btn-danger" onclick="triggerEmergency('low_battery')">Low Battery</button>
+                            <button class="btn btn-danger" onclick="triggerEmergency('high_wind')">High Wind</button>
+                            <button class="btn btn-danger" onclick="triggerEmergency('gps_loss')">GPS Loss</button>
+                            <button class="btn btn-danger" onclick="triggerEmergency('motor_fault')">Motor Fault</button>
+                        </div>
+                        <div id="emergency-status" class="tiny" style="margin-top:12px;">Acil durum tetiklenmedi.</div>
+                    </div>
+                    <div class="card">
+                        <h2 class="section-title">Mission Timeline</h2>
+                        <div id="timeline" class="empty">Aktif gorev yok.</div>
                     </div>
                 </div>
 
@@ -540,7 +604,7 @@ HTML_TEMPLATE = """
                         <div class="actions" style="margin-bottom: 14px;">
                             <button class="btn btn-primary" onclick="stepMission(true)">Siradaki Log Satirini Isle</button>
                         </div>
-                        <div id="telemetry-grid" class="metrics"></div>
+                        <div id="telemetry-grid" class="mini-grid"></div>
                         <div class="card" style="padding: 16px; margin: 0 0 14px; background: rgba(255,255,255,0.02);">
                             <h3 class="section-title" style="margin-bottom: 8px;">Otonom Risk ve Ucus Analizi</h3>
                             <div id="risk-panel" class="helper">Risk analizi bekleniyor.</div>
@@ -565,8 +629,8 @@ HTML_TEMPLATE = """
         <div id="tab-fipa" class="panel">
             <div class="card">
                 <h2 class="section-title">FIPA-ACL Ajan Iletisim Simulasyonu</h2>
-                <p class="helper">Koordinator, risk analiz ve raporlama ajanlari arasindaki ornek mesajlasma akisi.</p>
-                <button class="btn btn-primary" onclick="startFipaSimulation()" style="margin-bottom: 14px;">Simulasyonu Baslat</button>
+                <p class="helper">Mission Supervisor, Safety Officer, Telemetry Analyst ve Meteorology Agent rollerinin gercek mission akisindan uretilen mesajlari.</p>
+                <button class="btn btn-primary" onclick="startFipaSimulation()" style="margin-bottom: 14px;">Canli Akisi Yenile</button>
                 <div id="agent-log" class="console-box">> Sistem beklemede...</div>
             </div>
         </div>
@@ -587,7 +651,11 @@ HTML_TEMPLATE = """
         let map = null;
         let weatherMarker = null;
         let droneMarker = null;
+        let routeLine = null;
+        let trailLine = null;
         let replayTimer = null;
+        let droneAnimationFrame = null;
+        let lastReplayDelayMs = 1500;
 
         function showToast(message, type = "info") {
             const wrap = document.getElementById("toast-wrap");
@@ -657,6 +725,59 @@ HTML_TEMPLATE = """
             });
         }
 
+        function haversineMeters(a, b) {
+            const toRad = value => value * Math.PI / 180;
+            const earthRadius = 6371000;
+            const dLat = toRad(b.lat - a.lat);
+            const dLon = toRad(b.lon - a.lon);
+            const lat1 = toRad(a.lat);
+            const lat2 = toRad(b.lat);
+            const h = Math.sin(dLat / 2) ** 2
+                + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+            return 2 * earthRadius * Math.asin(Math.sqrt(h));
+        }
+
+        function computeReplayDelay(mission) {
+            const trail = mission?.trail || [];
+            if (trail.length < 2) return 1500;
+            const previous = trail[trail.length - 2];
+            const current = trail[trail.length - 1];
+            const distance = haversineMeters(previous, current);
+            const maxSpeedMetersPerSecond = 5;
+            return Math.max(Math.round((distance / maxSpeedMetersPerSecond) * 1000), 1500);
+        }
+
+        function animateDroneTo(latLng, heading, durationMs) {
+            if (!droneMarker) return;
+            if (droneAnimationFrame) {
+                cancelAnimationFrame(droneAnimationFrame);
+                droneAnimationFrame = null;
+            }
+            const start = droneMarker.getLatLng();
+            const startHeading = Number(droneMarker.options.currentHeading || heading || 0);
+            const startTime = performance.now();
+
+            function tick(now) {
+                const progress = Math.min((now - startTime) / durationMs, 1);
+                const lat = start.lat + (latLng[0] - start.lat) * progress;
+                const lon = start.lng + (latLng[1] - start.lng) * progress;
+                const currentHeading = startHeading + ((heading || 0) - startHeading) * progress;
+                droneMarker.setLatLng([lat, lon]);
+                droneMarker.setIcon(buildDroneIcon(currentHeading));
+                droneMarker.options.currentHeading = currentHeading;
+                if (currentMission?.replay_status === "flying") {
+                    map.panTo([lat, lon], {animate: false});
+                }
+                if (progress < 1) {
+                    droneAnimationFrame = requestAnimationFrame(tick);
+                } else {
+                    droneAnimationFrame = null;
+                }
+            }
+
+            droneAnimationFrame = requestAnimationFrame(tick);
+        }
+
         function initMap() {
             map = L.map("map").setView([38.42, 27.14], 12);
             L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
@@ -699,30 +820,52 @@ HTML_TEMPLATE = """
             if (!map || !mission || !mission.map_position) return;
             const pos = mission.map_position;
             const latLng = [pos.lat || 38.42, pos.lon || 27.14];
+            lastReplayDelayMs = computeReplayDelay(mission);
+            const plannedRoute = (mission.planned_route || []).map(point => [point.lat, point.lon]);
+            const trail = (mission.trail || []).map(point => [point.lat, point.lon]);
+            if (routeLine) map.removeLayer(routeLine);
+            if (trailLine) map.removeLayer(trailLine);
+            if (plannedRoute.length > 1) {
+                routeLine = L.polyline(plannedRoute, {
+                    color: "#2db8f6",
+                    weight: 3,
+                    opacity: 0.55,
+                    dashArray: "6 8"
+                }).addTo(map);
+            }
+            if (trail.length > 1) {
+                trailLine = L.polyline(trail, {
+                    color: "#58d59b",
+                    weight: 4,
+                    opacity: 0.9
+                }).addTo(map);
+            }
             const icon = buildDroneIcon(pos.heading || 0);
             if (!droneMarker) {
                 droneMarker = L.marker(latLng, {icon}).addTo(map);
+                droneMarker.options.currentHeading = pos.heading || 0;
             } else {
-                droneMarker.setLatLng(latLng);
-                droneMarker.setIcon(icon);
+                animateDroneTo(latLng, pos.heading || 0, lastReplayDelayMs);
             }
             droneMarker.bindPopup(`
                 <strong>Drone Replay</strong><br>
                 State: ${humanizeState(mission.state)}<br>
                 Replay: ${mission.replay_status}<br>
-                Altitude: ${pos.altitude ?? 0}m
+                Altitude: ${pos.altitude ?? 0}m<br>
+                Max display speed: 5 m/s
             `);
             if (mission.replay_status === "flying" || mission.state === "landed") {
-                map.panTo(latLng, {animate: true});
+                map.panTo(latLng, {animate: false});
             }
         }
 
         async function startMission() {
             const missionName = document.getElementById("mission-name").value || "Demo Mission";
+            const scenarioId = document.getElementById("scenario-id").value || "survey_grid";
             currentMission = await api("/api/missions", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({mission_name: missionName})
+                body: JSON.stringify({mission_name: missionName, scenario_id: scenarioId})
             });
             renderMission(currentMission);
             await primePreflight();
@@ -805,6 +948,19 @@ HTML_TEMPLATE = """
             await loadMissionReport();
         }
 
+        async function triggerEmergency(emergencyType) {
+            if (!currentMission) return;
+            currentMission = await api(`/api/missions/${currentMission.mission_id}/emergency`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({emergency_type: emergencyType})
+            });
+            renderMission(currentMission);
+            await loadMissionReport();
+            stopReplayLoop();
+            showToast(`<b>${currentMission.last_emergency.agent_role}:</b> ${emergencyType} icin ${currentMission.last_emergency.action} uygulandi.`, "warning");
+        }
+
         async function loadMissionReport() {
             if (!currentMission) {
                 document.getElementById("report").textContent = "Rapor henuz uretilmedi.";
@@ -845,21 +1001,17 @@ HTML_TEMPLATE = """
 
         function renderTelemetry(mission) {
             const grid = document.getElementById("telemetry-grid");
-            const snapshot = mission?.telemetry_snapshot || {};
+            const snapshot = mission?.compact_telemetry || {};
             const replay = mission?.replay_status || "--";
             grid.innerHTML = [
-                ["Mission State", humanizeState(mission?.state || "preflight")],
-                ["Replay", replay],
-                ["Battery", snapshot.battery ?? "--"],
-                ["GPS", snapshot.gps ?? "--"],
-                ["Wind", snapshot.wind ?? "--"],
-                ["Mode", snapshot.mode ?? "--"],
-                ["Event", snapshot.event ?? "--"],
-                ["Altitude", snapshot.altitude ?? "--"]
+                ["State", `${humanizeState(mission?.state || "preflight")} · ${replay}`],
+                ["Battery / GPS", `${snapshot.battery ?? "--"}% · ${snapshot.gps ?? "--"} sat`],
+                ["Wind / Mode", `${snapshot.wind ?? "--"} m/s · ${snapshot.mode ?? "--"}`],
+                ["Scenario", mission?.scenario_label || "--"]
             ].map(([label, value]) => `
-                <div class="metric">
+                <div class="compact-card">
                     <div class="metric-label">${label}</div>
-                    <div class="metric-value">${value}</div>
+                    <div style="margin-top:8px;font-size:1rem;font-weight:800;">${value}</div>
                 </div>
             `).join("");
         }
@@ -893,11 +1045,11 @@ HTML_TEMPLATE = """
             container.innerHTML = Object.entries(sections).map(([section, items]) => `
                 <div class="section-label">${section}</div>
                 ${items.map(item => `
-                    <div class="check-item">
-                        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+                    <div class="check-item" style="padding:10px 12px;">
+                        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
                             <div>
-                                <strong>${item.label}</strong>
-                                <div class="event-meta">${item.item_type} · ${item.source}</div>
+                                <strong style="font-size:0.92rem;">${item.label}</strong>
+                                <div class="tiny">${item.source}</div>
                             </div>
                             <span class="pill ${statusClass(item.status)}">${item.status}</span>
                         </div>
@@ -915,6 +1067,24 @@ HTML_TEMPLATE = """
             }
 
             const chunks = [];
+            (mission.proactive_messages || []).slice(-3).reverse().forEach(message => {
+                chunks.push(`
+                    <div class="compact-card">
+                        <strong>${message.title}</strong>
+                        <div class="event-meta">${message.agent_role}</div>
+                        <div class="tiny">${message.message}</div>
+                    </div>
+                `);
+            });
+            if (mission.last_emergency) {
+                chunks.push(`
+                    <div class="compact-card">
+                        <strong>Acil Durum</strong>
+                        <div class="event-meta">${mission.last_emergency.emergency_type} · ${mission.last_emergency.agent_role}</div>
+                        <div class="tiny">${mission.last_emergency.action}</div>
+                    </div>
+                `);
+            }
             if (mission.pending_approval) {
                 chunks.push(`
                     <div class="compact-card">
@@ -950,6 +1120,25 @@ HTML_TEMPLATE = """
             container.innerHTML = chunks.join("");
         }
 
+        function renderFipa(mission) {
+            const container = document.getElementById("agent-log");
+            if (!mission || !mission.fipa_log?.length) {
+                container.textContent = "> Sistem beklemede...";
+                return;
+            }
+            container.innerHTML = [...mission.fipa_log].slice(-14).map(entry => `
+                <div class="fipa-entry">
+                    <div>
+                        <span class="sender">${entry.sender}</span> →
+                        <span class="receiver">${entry.receiver}</span>
+                        [<span class="performative">${entry.performative}</span>]
+                    </div>
+                    <div style="margin-top:8px;">${entry.content}</div>
+                </div>
+            `).join("");
+            container.scrollTop = container.scrollHeight;
+        }
+
         function renderEventLog(mission) {
             const container = document.getElementById("event-log");
             if (!mission || !mission.event_log?.length) {
@@ -960,16 +1149,11 @@ HTML_TEMPLATE = """
             container.className = "";
             container.innerHTML = [...mission.event_log].reverse().map(entry => {
                 const time = entry.timestamp ? entry.timestamp.slice(11, 16) : "--:--";
-                const result = entry.result ? `<div class="event-meta">${entry.result}</div>` : "";
+                const result = entry.result ? ` · <span class="tiny">${entry.result}</span>` : "";
                 return `
-                    <div class="compact-card">
-                        <div class="event-line">
-                            <div><span class="pill ${statusClass(entry.level === "warn" ? "WARNING" : "GO")}">${time}</span></div>
-                            <div>
-                                <strong>${entry.agent_role}</strong> · ${entry.event_type}
-                                <div>${entry.summary}</div>
-                                ${result}
-                            </div>
+                    <div class="compact-card" style="padding:9px 12px;">
+                        <div style="font-size:0.87rem;line-height:1.35;">
+                            <strong>${time}</strong> · ${entry.agent_role} · ${entry.event_type} · ${entry.summary}${result}
                         </div>
                     </div>
                 `;
@@ -983,6 +1167,13 @@ HTML_TEMPLATE = """
             renderChecklist(mission);
             renderInbox(mission);
             renderEventLog(mission);
+            renderFipa(mission);
+            const emergencyEl = document.getElementById("emergency-status");
+            if (mission?.last_emergency) {
+                emergencyEl.textContent = `${mission.last_emergency.agent_role} → ${mission.last_emergency.action}`;
+            } else {
+                emergencyEl.textContent = "Acil durum tetiklenmedi.";
+            }
             updateDroneMarker(mission);
         }
 
@@ -999,7 +1190,7 @@ HTML_TEMPLATE = """
             replayTimer = setTimeout(async () => {
                 replayTimer = null;
                 await stepMission(false);
-            }, 1200);
+            }, lastReplayDelayMs);
         }
 
         function addFipaLog(sender, receiver, performative, content) {
@@ -1015,19 +1206,10 @@ HTML_TEMPLATE = """
         }
 
         function startFipaSimulation() {
-            const consoleEl = document.getElementById("agent-log");
-            consoleEl.innerHTML = "";
-            const messages = [
-                ["Coordinator_Agent", "Risk_Assessor", "REQUEST", "Batarya ve hava durumunu mission replay oncesi degerlendir."],
-                ["Risk_Assessor", "Coordinator_Agent", "AGREE", "Telemetri ve checklist sinyalleri okunuyor."],
-                ["Risk_Assessor", "Flight_Advisor", "INFORM", "Ruzgar stabil, GPS lock hazir, takeoff approval bekleniyor."],
-                ["Flight_Advisor", "Coordinator_Agent", "PROPOSE", "Takeoff verilebilir, rota replay modunda izlenebilir."],
-                ["Coordinator_Agent", "Report_Writer", "REQUEST", "Olaylari compact log formatinda sakla."],
-                ["Report_Writer", "Coordinator_Agent", "INFORM", "Gorev iletişim izi kaydedildi."]
-            ];
-            messages.forEach((item, index) => {
-                setTimeout(() => addFipaLog(item[0], item[1], item[2], item[3]), 900 * (index + 1));
-            });
+            renderFipa(currentMission);
+            if (!currentMission) {
+                showToast("<b>Mission Supervisor:</b> FIPA izini gormek icin aktif gorev gerekli.", "warning");
+            }
         }
 
         async function loadHistory() {
@@ -1049,8 +1231,12 @@ HTML_TEMPLATE = """
                         <span class="pill ${statusClass(item.state === "completed" ? "GO" : "WARNING")}">${humanizeState(item.state)}</span>
                     </div>
                     <div class="history-detail" id="history-detail-${item.mission_id}">
-                        <div class="event-meta">Checklist: ${item.history_summary?.completed_count || 0} / ${item.history_summary?.total_count || 0} · %${item.history_summary?.completion_percentage || 0}</div>
+                        <div class="history-row" style="margin-top:10px;">
+                            <div class="event-meta">Checklist: ${item.history_summary?.completed_count || 0} / ${item.history_summary?.total_count || 0} · %${item.history_summary?.completion_percentage || 0}</div>
+                            <button class="btn btn-danger" onclick="deleteHistoryMission(event, '${item.mission_id}')">Sil</button>
+                        </div>
                         <div class="event-meta">Son telemetri: Batarya ${item.telemetry_snapshot?.battery ?? "--"} · GPS ${item.telemetry_snapshot?.gps ?? "--"} · Ruzgar ${item.telemetry_snapshot?.wind ?? "--"}</div>
+                        <div class="event-meta">Senaryo: ${item.scenario_label || "--"}${item.latest_decision ? ` · Son karar: ${item.latest_decision}` : ""}</div>
                         <div class="event-meta">Event sayisi: ${item.event_count}</div>
                         <div id="history-payload-${item.mission_id}" style="margin-top:10px;"></div>
                     </div>
@@ -1078,6 +1264,17 @@ HTML_TEMPLATE = """
                 `).join("")}
             `;
             payloadEl.dataset.loaded = "1";
+        }
+
+        async function deleteHistoryMission(event, missionId) {
+            event.stopPropagation();
+            const response = await api(`/api/missions/${missionId}`, {method: "DELETE"});
+            if (response.deleted) {
+                showToast("<b>Report Writer:</b> History kaydi silindi.", "success");
+                loadHistory();
+            } else {
+                showToast("<b>Mission Supervisor:</b> Aktif gorev silinemez.", "danger");
+            }
         }
 
         window.onload = () => {

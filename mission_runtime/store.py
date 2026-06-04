@@ -84,19 +84,23 @@ class MissionStore:
         if supervisor.state == "completed" and self._active_id == supervisor.mission_id:
             self._active_id = None
 
-    def create(self, mission_name: str) -> MissionSupervisor:
-        supervisor = MissionSupervisor.create(mission_name, self._build_log_path(mission_name))
+    def create(self, mission_name: str, scenario_id: str = "survey_grid") -> MissionSupervisor:
+        supervisor = MissionSupervisor.create(
+            mission_name,
+            self._build_log_path(mission_name, scenario_id),
+            scenario_id=scenario_id,
+        )
         self._missions[supervisor.mission_id] = supervisor
         self._active_id = supervisor.mission_id
         self.save(supervisor)
         return supervisor
 
-    def _build_log_path(self, mission_name: str) -> Path:
+    def _build_log_path(self, mission_name: str, scenario_id: str) -> Path:
         mission_key = mission_name.lower().replace(" ", "-")
         mission_dir = self.base_dir / mission_key
         mission_dir.mkdir(parents=True, exist_ok=True)
         log_path = mission_dir / "telemetry.log"
-        write_sample_telemetry_log(log_path)
+        write_sample_telemetry_log(log_path, scenario_id=scenario_id)
         return log_path
 
     def get(self, mission_id: str) -> MissionSupervisor | None:
@@ -121,16 +125,21 @@ class MissionStore:
         history = []
         for row in rows:
             snapshot = json.loads(row["snapshot_json"])
+            last_emergency = snapshot.get("last_emergency") or {}
             history.append(
                 {
                     "mission_id": row["mission_id"],
                     "mission_name": row["mission_name"],
+                    "scenario_id": snapshot.get("scenario_id"),
+                    "scenario_label": snapshot.get("scenario_label"),
                     "state": row["state"],
                     "started_at": row["started_at"],
                     "ended_at": row["ended_at"],
                     "telemetry_snapshot": snapshot.get("telemetry_snapshot", {}),
                     "history_summary": snapshot.get("history_summary", {}),
                     "event_count": len(snapshot.get("event_log", [])),
+                    "emergency_count": 1 if last_emergency else 0,
+                    "latest_decision": last_emergency.get("action"),
                 }
             )
         return history
@@ -152,3 +161,11 @@ class MissionStore:
             return None
         return json.loads(row["snapshot_json"])
 
+    def delete(self, mission_id: str) -> bool:
+        active = self._missions.get(mission_id)
+        if active is not None and active.state != "completed":
+            return False
+        self._missions.pop(mission_id, None)
+        with self._connect() as connection:
+            cursor = connection.execute("DELETE FROM missions WHERE mission_id = ?", (mission_id,))
+        return cursor.rowcount > 0
