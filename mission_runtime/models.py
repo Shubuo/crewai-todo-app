@@ -13,6 +13,10 @@ class TelemetryEvent:
     gps: int | None = None
     wind: float | None = None
     mode: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    heading: float | None = None
+    altitude: float | None = None
     raw: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

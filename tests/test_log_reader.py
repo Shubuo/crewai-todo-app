@@ -23,6 +23,7 @@ class TelemetryLogReaderTests(unittest.TestCase):
             self.assertEqual(first.event, "mission_start")
             self.assertEqual(first.level, "info")
             self.assertEqual(first.battery, 96)
+            self.assertIsNotNone(first.ts)
             self.assertEqual(second.event, "route_loaded")
             self.assertIsNone(third)
 

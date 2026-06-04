@@ -15,37 +15,50 @@ class MissionSupervisorTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         return supervisor
 
+    def _complete_preflight(self, supervisor: MissionSupervisor) -> None:
+        supervisor.answer_question("propeller_check", True)
+        supervisor.answer_question("area_check", True)
+        supervisor.answer_question("camera_check", True)
+        for _ in range(4):
+            supervisor.process_next_event()
+
     def test_preflight_requires_takeoff_approval_after_checks(self):
         supervisor = self._build_supervisor()
 
-        supervisor.answer_question("propeller_check", True)
-        supervisor.answer_question("area_check", True)
-        supervisor.answer_question("camera_check", True)
-        supervisor.process_next_event()
-        supervisor.process_next_event()
-        supervisor.process_next_event()
-        supervisor.process_next_event()
+        self._complete_preflight(supervisor)
 
         self.assertEqual(supervisor.state, "ready_for_takeoff")
         self.assertEqual(supervisor.pending_approval["action"], "takeoff")
+        self.assertTrue(
+            any(entry["agent_role"] == "Mission Supervisor" for entry in supervisor.event_log)
+        )
 
-    def test_rth_event_creates_approval_request_and_event_log(self):
+    def test_takeoff_approval_starts_replay(self):
         supervisor = self._build_supervisor()
 
-        supervisor.answer_question("propeller_check", True)
-        supervisor.answer_question("area_check", True)
-        supervisor.answer_question("camera_check", True)
-        supervisor.process_next_event()
-        supervisor.process_next_event()
-        supervisor.process_next_event()
-        supervisor.process_next_event()
+        self._complete_preflight(supervisor)
         supervisor.approve_action("takeoff", True)
         supervisor.process_next_event()
-        supervisor.process_next_event()
 
-        self.assertEqual(supervisor.state, "rth")
-        self.assertEqual(supervisor.pending_approval["action"], "rth")
-        self.assertTrue(any(entry["event"] == "rth_recommended" for entry in supervisor.event_log))
+        self.assertEqual(supervisor.state, "in_flight")
+        self.assertEqual(supervisor.replay_status, "flying")
+        self.assertEqual(supervisor.telemetry_snapshot["event"], "takeoff")
+
+    def test_landing_event_pauses_replay_and_landing_approval_completes(self):
+        supervisor = self._build_supervisor()
+
+        self._complete_preflight(supervisor)
+        supervisor.approve_action("takeoff", True)
+        while supervisor.pending_approval is None:
+            supervisor.process_next_event()
+
+        self.assertEqual(supervisor.pending_approval["action"], "landing")
+        self.assertEqual(supervisor.replay_status, "awaiting_landing_approval")
+        supervisor.approve_action("landing", True)
+
+        self.assertEqual(supervisor.state, "completed")
+        self.assertEqual(supervisor.replay_status, "stopped")
+        self.assertIsNotNone(supervisor.ended_at)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,12 @@ def build_mission_report(supervisor) -> dict:
     return {
         "mission_name": supervisor.mission_name,
         "state": supervisor.state,
+        "started_at": getattr(supervisor, "started_at", None),
+        "ended_at": getattr(supervisor, "ended_at", None),
+        "replay_status": getattr(supervisor, "replay_status", None),
         "telemetry_snapshot": getattr(supervisor, "telemetry_snapshot", {}),
         "events": list(getattr(supervisor, "event_log", [])),
+        "history_summary": getattr(supervisor, "_history_summary", lambda: {})(),
+        "risk_summary": getattr(supervisor, "_risk_summary", lambda: {})(),
         "recommendations": recommendations,
     }

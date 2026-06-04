@@ -37,5 +37,9 @@ class TelemetryLogReader:
             gps=fields.get("gps"),
             wind=fields.get("wind"),
             mode=fields.get("mode"),
+            lat=fields.get("lat"),
+            lon=fields.get("lon"),
+            heading=fields.get("heading"),
+            altitude=fields.get("altitude"),
             raw=raw_fields,
         )

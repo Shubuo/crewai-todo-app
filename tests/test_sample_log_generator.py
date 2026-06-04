@@ -18,11 +18,14 @@ class SampleLogGeneratorTests(unittest.TestCase):
                 event = reader.read_next()
                 if event is None:
                     break
-                events.append(event.event)
+                events.append(event)
 
-            self.assertIn("mission_start", events)
-            self.assertIn("landing", events)
-            self.assertGreaterEqual(len(events), 7)
+            names = [event.event for event in events]
+            self.assertIn("mission_start", names)
+            self.assertIn("landing", names)
+            self.assertGreaterEqual(len(events), 9)
+            self.assertIsNotNone(events[0].lat)
+            self.assertIsNotNone(events[-1].heading)
 
 
 if __name__ == "__main__":
