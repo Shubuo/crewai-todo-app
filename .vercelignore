@@ -1,0 +1,14 @@
+pyproject.toml
+uv.lock
+.venv
+.uv-cache
+tests
+docs
+sunum
+article
+archive
+scripts/patches
+scripts/tools
+CONTEXT_SUMMARY.md
+DEMO_ADIMLAR.md
+PHASE1_DRONE_CHECKLIST_PLAN.md
