@@ -1,0 +1,66 @@
+mission_supervisor:
+  role: "Mission Supervisor"
+  layer: "runtime"
+  responsibility: "Orkestrasyonu yonetir, faz gecislerini yapar, onay ve soru akisini kontrol eder."
+  triggers:
+    - "mission_created"
+    - "preflight_completed"
+    - "takeoff_approved"
+    - "landing_approved"
+    - "emergency_triggered"
+  decisions:
+    - "phase_transition"
+    - "approval_request"
+    - "mission_complete"
+
+telemetry_analyst:
+  role: "Telemetry Analyst"
+  layer: "runtime"
+  responsibility: "Telemetri log satirlarini yorumlar, GPS ve baglanti sagligini izler, checklist auto-fill tetikler."
+  triggers:
+    - "telemetry_event"
+    - "gps_loss"
+    - "route_progress"
+  decisions:
+    - "telemetry_health"
+    - "hold_then_rth"
+    - "checklist_update"
+
+safety_officer:
+  role: "Safety Officer"
+  layer: "runtime"
+  responsibility: "GO/NO-GO sinirlarini izler, batarya ve operasyon risklerini degerlendirir."
+  triggers:
+    - "ready_for_takeoff"
+    - "battery_drop"
+    - "landing_required"
+    - "motor_fault"
+  decisions:
+    - "takeoff_go_no_go"
+    - "rth_now"
+    - "abort_and_land"
+
+meteorology_agent:
+  role: "Meteorology Agent"
+  layer: "runtime"
+  responsibility: "Ruzgar trendini ve hava riskini izler, proaktif uyarilar ve inis onerileri uretir."
+  triggers:
+    - "weather_check"
+    - "wind_rise"
+    - "high_wind"
+    - "map_weather_request"
+  decisions:
+    - "weather_risk_summary"
+    - "land_now"
+    - "weather_advice"
+
+report_writer:
+  role: "Report Writer"
+  layer: "runtime"
+  responsibility: "Gorev sonu raporu, event ozeti ve checklist sonucunu derler."
+  triggers:
+    - "landing_approved"
+    - "mission_completed"
+  decisions:
+    - "final_report"
+    - "history_summary"

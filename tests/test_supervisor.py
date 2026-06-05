@@ -101,6 +101,15 @@ class MissionSupervisorTests(unittest.TestCase):
         self.assertTrue(payload["fipa_log"])
         self.assertTrue(any(msg["sender"] == "Mission Supervisor" for msg in payload["fipa_log"]))
 
+    def test_runtime_crewai_fallback_is_visible_in_logs(self):
+        supervisor = self._build_supervisor("survey_grid")
+
+        event_types = [entry["event_type"] for entry in supervisor.event_log]
+        self.assertTrue(any(event_type.endswith("_fallback") for event_type in event_types))
+        self.assertTrue(
+            any("fallback engaged" in entry["content"] for entry in supervisor.fipa_log)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

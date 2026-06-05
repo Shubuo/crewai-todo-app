@@ -1,0 +1,31 @@
+mission_opening:
+  agent: mission_supervisor
+  expected_output: "Kisa operasyon acilisi ve ilk koordinasyon notu."
+
+takeoff_brief:
+  agent: safety_officer
+  expected_output: "Kisa kalkis uygunluk degerlendirmesi ve operatora yonelik net tavsiye."
+
+wind_early_warning:
+  agent: meteorology_agent
+  expected_output: "Ruzgar trendine gore erken uyari ve alternatif aksiyonlar."
+
+battery_buffer:
+  agent: safety_officer
+  expected_output: "Batarya rezervi riskine gore gorev kisaltma veya RTH tavsiyesi."
+
+gps_watch:
+  agent: telemetry_analyst
+  expected_output: "GPS kalite dususu icin kisa operasyon degerlendirmesi."
+
+emergency_decision:
+  agent: mission_supervisor
+  expected_output: "Acil durum turune gore anlik karar ve operasyon aciklamasi."
+
+landing_review:
+  agent: safety_officer
+  expected_output: "Inis sonrasi kisa son kontrol ve kapatma uygunluk notu."
+
+mission_completed:
+  agent: report_writer
+  expected_output: "Gorev tamamlandiginda kisa ozet, risk notu ve rapor girisi."

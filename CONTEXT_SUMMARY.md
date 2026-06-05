@@ -55,6 +55,7 @@ crewai-todo-app/
 │       ├── __init__.py
 │       └── custom_tool.py       # Placeholder, kullanilmiyor
 ├── drone_checklist_app.py       # Uygulama (Flask + SQLAlchemy + inline JS)
+├── mission_runtime/             # Runtime gorev orkestrasyonu ve gorev ajanlari
 ├── PHASE1_DRONE_CHECKLIST_PLAN.md  # Faz 1 plan dokumani
 ├── README.md                    # Kurulum ve kullanim (zenginlestirilmis)
 ├── DEMO_ADIMLAR.md              # Adim adim demo talimatlari
@@ -321,9 +322,10 @@ lsof -i :5000 -sTCP:LISTEN -P
 ## 14. Bilinen Sinirlar
 
 1. Paket adi `crewai_todo_app` olarak kaldi, degismedi
-2. CrewAI agent her calismada `drone_checklist_app.py`'yi overwrite eder (manually crafted versiyon korunmali)
-3. `uv run` macOS Intel'de `onnxruntime` override gerektirir
-4. GitHub email privacy nedeniyle son commit push edilemedi
+2. Build-time CrewAI ajanlari ile runtime mission agentlari ayri tutulur
+3. CrewAI agent her calismada `drone_checklist_app.py`'yi overwrite eder (manually crafted versiyon korunmali)
+4. `uv run` macOS Intel'de `onnxruntime` override gerektirir
+5. GitHub email privacy nedeniyle son commit push edilemedi
 5. Test dosyalari yok (`tests/` bos)
 6. Formatter/linter konfigure degil
 7. Emergency items session'a kopyalanmaz, ayri endpoint ile cekilir

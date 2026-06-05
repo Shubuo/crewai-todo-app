@@ -9,6 +9,7 @@ from mission_runtime.checklist_rules import (
     default_checklist_items,
     default_questions,
 )
+from mission_runtime.runtime_crewai import RuntimeMissionCrew
 from mission_runtime.log_reader import TelemetryLogReader
 from mission_runtime.models import ChecklistItem, MissionApproval, MissionQuestion
 from mission_runtime.sample_log_generator import scenario_label, scenario_route
@@ -55,11 +56,18 @@ class MissionSupervisor:
         self.pending_approval: dict | None = None
         self.event_log: list[dict] = []
         self.telemetry_snapshot: dict = {}
+        self.runtime_crew = RuntimeMissionCrew()
         self._log(
             "Mission Supervisor",
             "mission_created",
             f"{mission_name} gorevi hazirlandi.",
             result="Preflight baslatildi",
+        )
+        self._record_runtime_decision(
+            self.runtime_crew.decide(
+                "mission_opening",
+                self._decision_context(),
+            )
         )
         self._fipa(
             "Mission Supervisor",
@@ -240,11 +248,13 @@ class MissionSupervisor:
         gps = self.telemetry_snapshot.get("gps")
 
         if self.state == "ready_for_takeoff":
+            decision = self.runtime_crew.decide("takeoff_brief", self._decision_context())
+            self._record_runtime_decision(decision, ts=ts)
             self._add_proactive(
                 "takeoff-brief",
-                "Safety Officer",
+                decision.agent_role,
                 "Takeoff degerlendirmesi",
-                "Checklist tamamlandi. Kalkis onayi verilirken ruzgar ve GPS trendi birlikte kontrol edilmeli.",
+                decision.message,
                 severity="info",
                 actions=["Kalkisi onayla", "1 ek tur telemetry oku"],
             )
@@ -258,11 +268,13 @@ class MissionSupervisor:
 
         if self.state in {"in_flight", "rth"}:
             if wind is not None and wind >= 8:
+                decision = self.runtime_crew.decide("wind_early_warning", self._decision_context())
+                self._record_runtime_decision(decision, ts=ts)
                 self._add_proactive(
                     "wind-early-warning",
-                    "Meteorology Agent",
+                    decision.agent_role,
                     "Ruzgar trendi yukseliyor",
-                    "Ruzgar limit yakini. Rota kisaltma veya erken inis icin hazirlik oneriliyor.",
+                    decision.message,
                     severity="warning",
                     actions=["Rota kisalt", "RTH hazirla"],
                 )
@@ -274,11 +286,13 @@ class MissionSupervisor:
                     ts=ts,
                 )
             if battery is not None and battery <= 92:
+                decision = self.runtime_crew.decide("battery_buffer", self._decision_context())
+                self._record_runtime_decision(decision, ts=ts)
                 self._add_proactive(
                     "battery-buffer",
-                    "Safety Officer",
+                    decision.agent_role,
                     "Batarya rezervi izleniyor",
-                    "Batarya dusus hizi mevcut gorev profilinde erken donus penceresini etkileyebilir.",
+                    decision.message,
                     severity="warning",
                     actions=["RTH rezervi hesapla", "Gorevi kisalt"],
                 )
@@ -290,11 +304,13 @@ class MissionSupervisor:
                     ts=ts,
                 )
             if gps is not None and gps <= 15:
+                decision = self.runtime_crew.decide("gps_watch", self._decision_context())
+                self._record_runtime_decision(decision, ts=ts)
                 self._add_proactive(
                     "gps-watch",
-                    "Telemetry Analyst",
+                    decision.agent_role,
                     "GPS kalite takibi",
-                    "Uydu sayisi dusuyor. Rota hassasiyeti azalirsa hold veya RTH secenekleri hazir tutulmali.",
+                    decision.message,
                     severity="warning",
                     actions=["Hold hazirla", "RTH hazirla"],
                 )
@@ -389,6 +405,9 @@ class MissionSupervisor:
             self.state = "postflight"
             self.replay_status = "stopped"
             self.ended_at = utc_now()
+            self._record_runtime_decision(
+                self.runtime_crew.decide("landing_review", self._decision_context()),
+            )
             self._finalize_completed_mission()
 
     def trigger_emergency(self, emergency_type: str) -> None:
@@ -422,6 +441,16 @@ class MissionSupervisor:
             f"{emergency_type} tetiklendi.",
             result=action,
             level="warn",
+        )
+        self._record_runtime_decision(
+            self.runtime_crew.decide(
+                "emergency_decision",
+                self._decision_context(
+                    emergency_type=emergency_type,
+                    action=action,
+                    agent_role=agent_role,
+                ),
+            )
         )
         self._fipa(
             "Mission Supervisor",
@@ -547,6 +576,10 @@ class MissionSupervisor:
             approval = MissionApproval("landing", "Inis sonrasi onay gerekli")
             self.pending_approval = approval.to_dict()
             self.approvals.append(self.pending_approval)
+            self._record_runtime_decision(
+                self.runtime_crew.decide("landing_review", self._decision_context()),
+                ts=event.ts,
+            )
             self._log(
                 "Mission Supervisor",
                 "landing_hold",
@@ -581,6 +614,40 @@ class MissionSupervisor:
 
     def pending_questions(self) -> list[dict]:
         return [question.to_dict() for question in self.questions if question.status == "pending"]
+
+    def _decision_context(self, **extra) -> dict:
+        context = {
+            "mission_id": self.mission_id,
+            "mission_name": self.mission_name,
+            "scenario_id": self.scenario_id,
+            "scenario_label": self.scenario_label,
+            "state": self.state,
+            "replay_status": self.replay_status,
+            "telemetry": dict(self.telemetry_snapshot),
+            "pending_approval": dict(self.pending_approval) if self.pending_approval else None,
+            "risk_summary": self._risk_summary(),
+            "history_summary": self._history_summary(),
+        }
+        context.update(extra)
+        return context
+
+    def _record_runtime_decision(self, decision, ts: str | None = None) -> None:
+        self._log(
+            decision.agent_role,
+            f"{decision.task_name}_{decision.mode}",
+            decision.message,
+            result=decision.mode.upper(),
+            level="warn" if decision.mode == "fallback" else "info",
+            ts=ts,
+        )
+        if decision.mode == "fallback":
+            self._fipa(
+                decision.agent_role,
+                "Mission Supervisor",
+                "INFORM",
+                decision.fallback_reason or "LLM unavailable -> fallback engaged",
+                ts=ts,
+            )
 
     def to_api_payload(self) -> dict:
         return {

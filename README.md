@@ -8,7 +8,7 @@ CrewAI ile uretilen, drone ucus checklist'lerini yonetmek icin Flask tabanli tek
 
 ```
 crewai-todo-app/
-├── src/crewai_todo_app/         # CREWAI URETIM KATI
+├── src/crewai_todo_app/         # CREWAI URETIM KATI (build-time)
 │   ├── config/
 │   │   ├── agents.yaml          # Agent: Full-Stack Developer
 │   │   └── tasks.yaml           # Task: drone checklist app uretimi
@@ -16,6 +16,10 @@ crewai-todo-app/
 │   └── main.py                  # run/train/replay/test komutlari
 │
 ├── drone_checklist_app.py       # UYGULAMA KATI (Flask + SQLite + inline JS)
+├── mission_runtime/             # RUNTIME GOREV ORKESTRASYONU
+│   ├── supervisor.py            # Mission Supervisor akisi
+│   ├── runtime_agents.yaml      # Runtime agent rolleri ve sorumluluklari
+│   └── ...                      # log_reader, reporting, store, vb.
 ├── drone_checklist.db           # SQLite veritabani
 │
 ├── README.md
@@ -36,6 +40,15 @@ crewai-todo-app/
 ```
 
 ---
+
+Build-time CrewAI ajanlari ile uygulama icindeki runtime ajanlar ayri katmanlardir:
+
+- `src/crewai_todo_app/config/agents.yaml`: uygulamayi ureten CrewAI ajanlari
+- `mission_runtime/runtime_agents.yaml`: gorev sirasinda calisan runtime roller
+- `mission_runtime/runtime_tasks.yaml`: runtime agent karar tipleri
+
+Runtime gorev ajanlari artik `mission_runtime/runtime_crewai.py` uzerinden gercek `CrewAI Agent/Task` akisini dener.
+OpenRouter/CrewAI erisimi yoksa gorev akisi durmaz; event ve FIPA log'una `fallback engaged` izi dusurulerek deterministik supervisor kararina donulur.
 
 ## Teknoloji Yigini
 

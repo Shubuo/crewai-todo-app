@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 os.environ.setdefault("OPENAI_API_BASE", "https://openrouter.ai/api/v1")
 os.environ.setdefault("OPENAI_MODEL_NAME", "openrouter/owl-alpha")
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
 if os.environ.get("OPENAI_API_KEY"):
     os.environ["OPENROUTER_API_KEY"] = os.environ["OPENAI_API_KEY"]
 if os.environ.get("OPENROUTER_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
